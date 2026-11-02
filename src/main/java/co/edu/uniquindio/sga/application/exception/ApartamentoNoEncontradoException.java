@@ -1,0 +1,16 @@
+package co.edu.uniquindio.sga.application.exception;
+
+import co.edu.uniquindio.sga.domain.valueobject.IdentificacionApartamento;
+
+/**
+ * Excepción de aplicación que indica que no se encontró un apartamento.
+ */
+
+public class ApartamentoNoEncontradoException extends RuntimeException {
+
+    public ApartamentoNoEncontradoException(
+            IdentificacionApartamento identificacion) {
+
+        super("No se encontró el apartamento con identificación: " + identificacion.valor());
+    }
+}

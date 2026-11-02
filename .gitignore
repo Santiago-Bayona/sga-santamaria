@@ -36,6 +36,10 @@ out/
 ### VS Code ###
 .vscode/
 
+.DS_Store
+__MACOSX/
+hola.txt
+
 
 # Archivos de entorno y propiedades locales
 .env
