@@ -1,0 +1,60 @@
+spring:
+  application:
+    name: sga
+  profiles:
+    active: ${SGA_PERFIL:dev}
+  jackson:
+    datatype:
+      datetime:
+        write-dates-as-timestamps: false
+
+server:
+  port: ${SERVER_PORT:8080}
+
+springdoc:
+  api-docs:
+    path: /v3/api-docs
+  swagger-ui:
+    path: /swagger-ui.html
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+  endpoint:
+    health:
+      show-details: when_authorized
+  info:
+    env:
+      enabled: true
+
+info:
+  app:
+    name: SGA Santamaría
+    capa: infrastructure
+    responsable: Laura Sofia Osorio Medina
+
+sga:
+  ficha:
+    hora-entrada: "15:00"
+    hora-salida: "11:00"
+    tiempo-preparacion-horas: 3
+    plazo-confirmacion-horas: 24
+    hora-limite-no-show: "18:00"
+    umbral-edad-facturable: 5
+    porcentaje-anticipo: 30
+    antelacion-recordatorio-entrada-horas: 24
+    antelacion-recordatorio-salida-horas: 4
+  archivos:
+    directorio: ${SGA_ARCHIVOS:data/galeria}
+  recordatorios:
+    intervalo-ms: 300000
+    delay-inicial-ms: 15000
+  vencimientos:
+    intervalo-ms: 3600000
+    delay-inicial-ms: 20000
+  seguridad:
+    jwt-secret: ${SGA_JWT_SECRET:cambiar-en-produccion-sga-santamaria-256bits-minimo}
+    jwt-expiracion-minutos: ${SGA_JWT_EXP_MIN:480}
+    cors-origins: ${SGA_CORS_ORIGINS:http://localhost:8080,http://localhost:5173}
