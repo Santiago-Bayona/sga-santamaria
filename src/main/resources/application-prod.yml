@@ -1,0 +1,28 @@
+spring:
+  datasource:
+    url: ${SGA_DB_URL:jdbc:h2:file:./data/sgadb;AUTO_SERVER=TRUE}
+    driver-class-name: org.h2.Driver
+    username: ${SGA_DB_USER:sa}
+    password: ${SGA_DB_PASSWORD:}
+  h2:
+    console:
+      enabled: false
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    show-sql: false
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+
+logging:
+  level:
+    root: INFO
+    co.edu.uniquindio.sga: INFO
+    org.springframework.security: WARN
