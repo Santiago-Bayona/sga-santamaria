@@ -48,7 +48,7 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.GET, "/api/disponibilidad", "/api/alojamiento", "/api/apartamentos").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/cotizaciones").permitAll()
                         .requestMatchers("/h2-console/**", "/actuator/health", "/actuator/info", "/api/docs",
-                                "/swagger-ui.html", "/swagger-ui/**", "/v3/api-docs", "/v3/api-docs/**").permitAll()
+                                "/swagger-ui.html", "/swagger-ui/**", "/v3/api-docs", "/v3/api-docs/**", "/v3/api-docs.yaml").permitAll()
                         .anyRequest().authenticated())
                 .addFilterBefore(jwtFilter, UsernamePasswordAuthenticationFilter.class)
                 .build();
