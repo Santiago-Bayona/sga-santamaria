@@ -1,0 +1,180 @@
+### Colección de pruebas SGA Santamaría (VS Code REST Client)
+### Ejecutar en orden contra la aplicación recién arrancada. No requiere preparar nada a mano:
+### usa los datos de prueba del arranque (APT-01..APT-05, TIT-001..TIT-003).
+
+@base = http://localhost:8080
+
+### 1. Login recepción
+# @name login
+POST {{base}}/api/auth/login
+Content-Type: application/json
+
+{ "username": "recepcion", "password": "recepcion123" }
+
+### 2. Login huésped (TIT-001)
+# @name loginHuesped
+POST {{base}}/api/auth/login
+Content-Type: application/json
+
+{ "username": "huesped", "password": "huesped123" }
+
+### 3. 401 — sin token
+GET {{base}}/api/reservas
+
+### 4. 403 — un huésped no crea reservas por canal directo
+POST {{base}}/api/reservas
+Authorization: Bearer {{loginHuesped.response.body.token}}
+Content-Type: application/json
+
+{
+  "codigoTitular": "TIT-001", "identificacionApartamento": "APT-03",
+  "fechaEntrada": "2027-03-10", "fechaSalida": "2027-03-12",
+  "acompanantes": [], "horaLlegadaEstimada": "16:00:00", "canalOrigen": "DIRECTO", "mascotas": 0
+}
+
+### 5. Disponibilidad (7.5): 2 adultos y un niño de 2 años, temporada baja
+GET {{base}}/api/disponibilidad?fechaEntrada=2027-03-10&fechaSalida=2027-03-12&fechasNacimiento=1988-07-02&fechasNacimiento=1990-01-01&fechasNacimiento=2025-01-01
+Authorization: Bearer {{login.response.body.token}}
+
+### 6. Cotización con desglose noche por noche (cruza Base → Alta el 1 de junio)
+POST {{base}}/api/cotizaciones
+Authorization: Bearer {{login.response.body.token}}
+Content-Type: application/json
+
+{
+  "identificacionApartamento": "APT-01", "fechaEntrada": "2027-05-30", "fechaSalida": "2027-06-02",
+  "ocupantes": [ { "nombre": "Carlos Restrepo", "fechaNacimiento": "1988-07-02" },
+                 { "nombre": "Sofía Restrepo", "fechaNacimiento": "2025-01-01" } ]
+}
+
+### 7. Crear reserva — 201 + Location
+# @name crear
+POST {{base}}/api/reservas
+Authorization: Bearer {{login.response.body.token}}
+Content-Type: application/json
+
+{
+  "codigoTitular": "TIT-002", "identificacionApartamento": "APT-03",
+  "fechaEntrada": "2027-03-10", "fechaSalida": "2027-03-12",
+  "acompanantes": [ { "nombre": "Ana Gómez", "fechaNacimiento": "1990-04-12" } ],
+  "horaLlegadaEstimada": "16:00:00", "canalOrigen": "DIRECTO", "mascotas": 1
+}
+
+### 8. Consultar la reserva creada
+GET {{base}}/api/reservas/{{crear.response.body.codigo}}
+Authorization: Bearer {{login.response.body.token}}
+
+### 9. Confirmar
+POST {{base}}/api/reservas/{{crear.response.body.codigo}}/confirmacion
+Authorization: Bearer {{login.response.body.token}}
+
+### 10. Listado paginado (10 por página, de la más reciente a la más antigua)
+GET {{base}}/api/reservas?pagina=0
+Authorization: Bearer {{login.response.body.token}}
+
+### 11. 409 RN-01 — solape con la reserva anterior
+POST {{base}}/api/reservas
+Authorization: Bearer {{login.response.body.token}}
+Content-Type: application/json
+
+{
+  "codigoTitular": "TIT-003", "identificacionApartamento": "APT-03",
+  "fechaEntrada": "2027-03-11", "fechaSalida": "2027-03-13",
+  "acompanantes": [], "horaLlegadaEstimada": "16:00:00", "canalOrigen": "DIRECTO", "mascotas": 0
+}
+
+### 12. 409 RN-02 — 3 personas en Orquídea (capacidad 2)
+POST {{base}}/api/reservas
+Authorization: Bearer {{login.response.body.token}}
+Content-Type: application/json
+
+{
+  "codigoTitular": "TIT-003", "identificacionApartamento": "APT-02",
+  "fechaEntrada": "2027-04-10", "fechaSalida": "2027-04-12",
+  "acompanantes": [ { "nombre": "Acompañante 1", "fechaNacimiento": "1992-01-01" },
+                    { "nombre": "Acompañante 2", "fechaNacimiento": "1993-01-01" } ],
+  "horaLlegadaEstimada": "16:00:00", "canalOrigen": "DIRECTO", "mascotas": 0
+}
+
+### 13. 409 RN-03 — salida igual a la entrada
+POST {{base}}/api/reservas
+Authorization: Bearer {{login.response.body.token}}
+Content-Type: application/json
+
+{
+  "codigoTitular": "TIT-003", "identificacionApartamento": "APT-01",
+  "fechaEntrada": "2027-04-10", "fechaSalida": "2027-04-10",
+  "acompanantes": [], "horaLlegadaEstimada": "16:00:00", "canalOrigen": "DIRECTO", "mascotas": 0
+}
+
+### 14. 409 RN-04 — entrada en el pasado
+POST {{base}}/api/reservas
+Authorization: Bearer {{login.response.body.token}}
+Content-Type: application/json
+
+{
+  "codigoTitular": "TIT-003", "identificacionApartamento": "APT-01",
+  "fechaEntrada": "2026-01-10", "fechaSalida": "2026-01-12",
+  "acompanantes": [], "horaLlegadaEstimada": "16:00:00", "canalOrigen": "DIRECTO", "mascotas": 0
+}
+
+### 15. 409 L-16 — más de 2 mascotas
+POST {{base}}/api/reservas
+Authorization: Bearer {{login.response.body.token}}
+Content-Type: application/json
+
+{
+  "codigoTitular": "TIT-003", "identificacionApartamento": "APT-01",
+  "fechaEntrada": "2027-04-10", "fechaSalida": "2027-04-12",
+  "acompanantes": [], "horaLlegadaEstimada": "16:00:00", "canalOrigen": "DIRECTO", "mascotas": 3
+}
+
+### 16. Registrar bloqueo — 201
+POST {{base}}/api/bloqueos
+Authorization: Bearer {{login.response.body.token}}
+Content-Type: application/json
+
+{
+  "codigoBloqueo": "BLQ-PRUEBA-01", "identificacionApartamento": "APT-01",
+  "fechaInicio": "2027-05-01", "fechaFin": "2027-05-05", "motivo": "Pintura del apartamento"
+}
+
+### 17. 409 RN-07 — reservar sobre noches bloqueadas
+POST {{base}}/api/reservas
+Authorization: Bearer {{login.response.body.token}}
+Content-Type: application/json
+
+{
+  "codigoTitular": "TIT-003", "identificacionApartamento": "APT-01",
+  "fechaEntrada": "2027-05-02", "fechaSalida": "2027-05-04",
+  "acompanantes": [], "horaLlegadaEstimada": "16:00:00", "canalOrigen": "DIRECTO", "mascotas": 0
+}
+
+### 18. 409 (7.3) — bloqueo sobre noches con una reserva activa
+POST {{base}}/api/bloqueos
+Authorization: Bearer {{login.response.body.token}}
+Content-Type: application/json
+
+{
+  "codigoBloqueo": "BLQ-PRUEBA-02", "identificacionApartamento": "APT-03",
+  "fechaInicio": "2027-03-10", "fechaFin": "2027-03-12", "motivo": "Mantenimiento"
+}
+
+### 19. Cancelar la reserva confirmada — aplica la política congelada
+POST {{base}}/api/reservas/{{crear.response.body.codigo}}/cancelacion
+Authorization: Bearer {{login.response.body.token}}
+Content-Type: application/json
+
+{ "motivo": "El titular cambió sus planes" }
+
+### 20. 409 RN-08 — confirmar una reserva cancelada (transición inválida)
+POST {{base}}/api/reservas/{{crear.response.body.codigo}}/confirmacion
+Authorization: Bearer {{login.response.body.token}}
+
+### 21. 404 — reserva inexistente
+GET {{base}}/api/reservas/RES-NO-EXISTE
+Authorization: Bearer {{login.response.body.token}}
+
+### 22. Datos de prueba: reservas por estado (hay una de cada una)
+GET {{base}}/api/reservas/estado/EN_CURSO
+Authorization: Bearer {{login.response.body.token}}
