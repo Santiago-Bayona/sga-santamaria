@@ -1,0 +1,4649 @@
+openapi: 3.1.0
+info:
+  title: API SGA — Santamaría
+  description: |-
+    API RESTful del Sistema de Gestión de Alojamiento (SGA) de Santamaría.
+
+    **Agregado principal:** Reserva.
+
+    **Convenciones del proyecto**
+    - Rutas en plural bajo `/api`. No hay `DELETE` (bajas lógicas) ni `PATCH`.
+    - Las transiciones de estado son `POST` a un sustantivo de la acción (`/confirmacion`, `/cancelacion`, `/llegada`, `/salida`, `/no-show`).
+    - Paginación: `pagina` desde 0, tamaño fijo de 10.
+    - Dinero en pesos colombianos (COP), enteros, sin decimales (`int64`).
+    - Fechas `yyyy-MM-dd`, horas `HH:mm:ss`, fecha-hora ISO-8601.
+
+    **Códigos de error**
+    - `400` formato inválido (Bean Validation) · `401` sin token · `403` rol sin permiso · `404` no existe · `409` viola una regla de negocio o hay conflicto · `500` fallo interno.
+
+    **Seguridad:** JWT Bearer. Roles: `ADMIN`, `RECEPCION`, `SERVICIO`, `CANAL`, `HUESPED`.
+  version: 1.0.0
+  contact:
+    name: Equipo SGA Santamaría
+    email: sofia.santamariar@uqvirtual.edu.co
+servers:
+- url: http://localhost:8080
+  description: Servidor de desarrollo local
+tags:
+- name: Autenticación
+  description: Login y consulta del usuario del token (JWT).
+- name: Reservas
+  description: 'Ciclo de vida del agregado Reserva: crear, consultar, confirmar, modificar, cancelar, llegada, salida, no-show, vencimiento.'
+- name: Folios
+  description: 'Cuenta de la reserva: cargos, pagos, reversos (RN-16) y cierre (RN-17).'
+- name: Recordatorios
+  description: Recordatorios de entrada y salida de una reserva (RN-23 a RN-25).
+- name: Titulares
+  description: Huésped titular de una reserva.
+- name: Apartamentos
+  description: 'Inventario: ficha, activación, tarifas, capacidad, estado operativo y fuera de servicio.'
+- name: Alojamiento
+  description: Ficha del alojamiento, configuración, normas, servicios adicionales y temporadas.
+- name: Políticas de cancelación
+  description: Versiones de la política de cancelación (RN-13, RN-22).
+- name: Bloqueos
+  description: Bloqueo de noches de un apartamento (RN-07).
+- name: Disponibilidad y calendario
+  description: Búsqueda de apartamentos libres y calendario de ocupación.
+- name: Cotizaciones
+  description: Cálculo del valor de una estancia (7.4).
+- name: Canales externos
+  description: 'Integración con canales externos: conciliación y conflictos (RN-19).'
+- name: Novedades
+  description: Novedades reportadas sobre un apartamento.
+- name: Reportes
+  description: 'Indicadores para la administración: ingresos, ocupación y reservas por canal.'
+security:
+- bearerAuth: []
+paths:
+  /api/auth/login:
+    post:
+      tags:
+      - Autenticación
+      summary: Iniciar sesión y obtener el token JWT
+      operationId: iniciarSesion
+      description: |-
+        Caso de uso: `AuthController`.
+
+        Público (no requiere token).
+
+        Credenciales inválidas se informan con **400** (SolicitudAplicacionException), no con 401.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+            example:
+              username: recepcion
+              password: '********'
+      responses:
+        '200':
+          description: Token emitido
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TokenResponse'
+        '400':
+          $ref: '#/components/responses/DatosInvalidos'
+        '500':
+          $ref: '#/components/responses/ErrorInterno'
+      security: []
+  /api/auth/me:
+    get:
+      tags:
+      - Autenticación
+      summary: Consultar el usuario autenticado
+      operationId: consultarUsuarioActual
+      description: |-
+        Caso de uso: `AuthController`.
+
+        Público (no requiere token).
+
+        La ruta está abierta en SecurityConfig, pero responde **401** si la petición no trae un JWT válido.
+      responses:
+        '200':
+          description: Datos del usuario del token (sin token nuevo)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TokenResponse'
+        '401':
+          $ref: '#/components/responses/NoAutenticado'
+        '500':
+          $ref: '#/components/responses/ErrorInterno'
+      security: []
+  /api/reservas:
+    post:
+      tags:
+      - Reservas
+      summary: Crear una reserva PENDIENTE
+      operationId: crearReserva
+      description: |-
+        Caso de uso: `CrearReservaUseCase`.
+
+        Roles permitidos: `ADMIN`, `RECEPCION`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CrearReservaRequest'
+            example:
+              codigoTitular: TIT-0001
+              identificacionApartamento: APT-301
+              fechaEntrada: '2026-12-20'
+              fechaSalida: '2026-12-23'
+              acompanantes:
+              - nombre: Luis Pérez
+                fechaNacimiento: '1988-04-12'
+              horaLlegadaEstimada: '15:00:00'
+              canalOrigen: PORTAL
+              mascotas: 1
+      responses:
+        '201':
+          description: 'Reserva creada (cabecera Location: /api/reservas/{codigo})'
+          headers:
+            Location:
+              description: URL del recurso creado
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReservaDetalleResponse'
+        '400':
+          $ref: '#/components/responses/DatosInvalidos'
+        '401':
+          $ref: '#/components/responses/NoAutenticado'
+        '403':
+          $ref: '#/components/responses/Prohibido'
+        '404':
+          $ref: '#/components/responses/NoEncontrado'
+        '409':
+          description: |-
+            La operación viola una regla de negocio:
+            - RN-01: la estancia se solapa con una reserva activa del apartamento
+            - RN-02 / 3.2: el total de ocupantes (titular incluido, facturables o no) excede la capacidad
+            - RN-03: la fecha de salida no es posterior a la de entrada
+            - RN-04: la fecha de entrada es anterior a hoy
+            - RN-06 / 3.2: el titular no es un ocupante facturable
+            - RN-07: alguna noche está bloqueada
+            - Canal EXTERNO sin identificadorExterno (o canal propio con identificador): la combinación canal + identificador es la base de RN-19
+            - RN-20: no cabe el tiempo de preparación entre la salida de una reserva y la entrada de otra
+            - L-16: más de 2 mascotas
+            - El apartamento no está activo o no tiene tarifa en todas las temporadas
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          $ref: '#/components/responses/ErrorInterno'
+    get:
+      tags:
+      - Reservas
+      summary: Buscar y filtrar reservas (paginado)
+      operationId: listarReservas
+      description: |-
+        Caso de uso: `ListarReservasUseCase`.
+
+        Roles permitidos: `ADMIN`, `RECEPCION`.
+
+        Filtros opcionales (DTO `ListarReservasRequest`). Todos se combinan con AND.
+      parameters:
+      - name: fechaDesde
+        in: query
+        required: false
+        description: Entrada desde
+        schema:
+          type: string
+          format: date
+      - name: fechaHasta
+        in: query
+        required: false
+        description: Entrada hasta
+        schema:
+          type: string
+          format: date
+      - name: estado
+        in: query
+        required: false
+        description: Estado de la reserva
+        schema:
+          $ref: '#/components/schemas/EstadoReserva'
+      - name: identificacionApartamento
+        in: query
+        required: false
+        description: Apartamento
+        schema:
+          type: string
+      - name: canalOrigen
+        in: query
+        required: false
+        description: Canal de origen
+        schema:
+          $ref: '#/components/schemas/CanalOrigen'
+      - name: codigoTitular
+        in: query
+        required: false
+        description: Titular
+        schema:
+          type: string
+      - name: pagina
+        in: query
+        required: false
+        description: Número de página, desde 0. El tamaño es fijo (10).
+        schema:
+          type: integer
+          default: 0
+          minimum: 0
+      responses:
+        '200':
+          description: Página de reservas
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginaReservaResumenResponse'
+        '400':
+          $ref: '#/components/responses/DatosInvalidos'
+        '401':
+          $ref: '#/components/responses/NoAutenticado'
+        '403':
+          $ref: '#/components/responses/Prohibido'
+        '500':
+          $ref: '#/components/responses/ErrorInterno'
+  /api/reservas/{codigo}:
+    get:
+      tags:
+      - Reservas
+      summary: Consultar una reserva
+      operationId: consultarReserva
+      description: |-
+        Caso de uso: `ConsultarReservaUseCase`.
+
+        Roles permitidos: `ADMIN`, `RECEPCION`.
+      parameters:
+      - name: codigo
+        in: path
+        required: true
+        description: Código de la reserva, p. ej. RES-2026-00001
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Reserva encontrada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReservaDetalleResponse'
+        '401':
+          $ref: '#/components/responses/NoAutenticado'
+        '403':
+          $ref: '#/components/responses/Prohibido'
+        '404':
+          $ref: '#/components/responses/NoEncontrado'
+        '500':
+          $ref: '#/components/responses/ErrorInterno'
+    put:
+      tags:
+      - Reservas
+      summary: Modificar fechas, apartamento, ocupantes o mascotas
+      operationId: modificarReserva
+      description: |-
+        Caso de uso: `ModificarReservaUseCase`.
+
+        Roles permitidos: `ADMIN`, `RECEPCION`.
+
+        La diferencia de valor (positiva o negativa) se registra como ajuste en el folio (RN-14).
+      parameters:
+      - name: codigo
+        in: path
+        required: true
+        description: Código de la reserva, p. ej. RES-2026-00001
+        schema:
+          type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ModificarReservaRequest'
+      responses:
+        '200':
+          description: Modificación aplicada; informa el ajuste de valor
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ModificacionReservaResponse'
+        '400':
+          $ref: '#/components/responses/DatosInvalidos'
+        '401':
+          $ref: '#/components/responses/NoAutenticado'
+        '403':
+          $ref: '#/components/responses/Prohibido'
+        '404':
+          $ref: '#/components/responses/NoEncontrado'
+        '409':
+          description: |-
+            La operación viola una regla de negocio:
+            - RN-14: solo se modifica una reserva PENDIENTE o CONFIRMADA
+            - RN-14: se repiten las validaciones de creación (RN-01, RN-02, RN-03, RN-04, RN-07, RN-20)
+            - RN-22: la política de cancelación congelada no cambia al modificar
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          $ref: '#/components/responses/ErrorInterno'
+  /api/reservas/estado/{estado}:
+    get:
+      tags:
+      - Reservas
+      summary: Listar reservas por estado
+      operationId: consultarReservasPorEstado
+      description: |-
+        Caso de uso: `ConsultarReservaPorEstadoUseCase`.
+
+        Roles permitidos: `ADMIN`, `RECEPCION`.
+      parameters:
+      - name: estado
+        in: path
+        required: true
+        description: Estado de la reserva
+        schema:
+          $ref: '#/components/schemas/EstadoReserva'
+      - name: pagina
+        in: query
+        required: false
+        description: Número de página, desde 0. El tamaño es fijo (10).
+        schema:
+          type: integer
+          default: 0
+          minimum: 0
+      responses:
+        '200':
+          description: Página de reservas
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginaReservaResumenResponse'
+        '400':
+          $ref: '#/components/responses/DatosInvalidos'
+        '401':
+          $ref: '#/components/responses/NoAutenticado'
+        '403':
+          $ref: '#/components/responses/Prohibido'
+        '500':
+          $ref: '#/components/responses/ErrorInterno'
+  /api/reservas/titular/{codigoTitular}:
+    get:
+      tags:
+      - Reservas
+      summary: Historial de reservas de un titular
+      operationId: consultarHistorialDeTitular
+      description: |-
+        Caso de uso: `ConsultarHistorialReservasUseCase`.
+
+        Roles permitidos: `ADMIN`, `RECEPCION`, `HUESPED`.
+      parameters:
+      - name: codigoTitular
+        in: path
+        required: true
+        description: Código del titular
+        schema:
+          type: string
+      - name: pagina
+        in: query
+        required: false
+        description: Número de página, desde 0. El tamaño es fijo (10).
+        schema:
+          type: integer
+          default: 0
+          minimum: 0
+      responses:
+        '200':
+          description: Página de reservas del titular
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginaReservaResumenResponse'
+        '400':
+          $ref: '#/components/responses/DatosInvalidos'
+        '401':
+          $ref: '#/components/responses/NoAutenticado'
+        '403':
+          $ref: '#/components/responses/Prohibido'
+        '500':
+          $ref: '#/components/responses/ErrorInterno'
+  /api/reservas/llegadas:
+    get:
+      tags:
+      - Reservas
+      summary: Llegadas previstas de un día
+      operationId: consultarLlegadasPrevistas
+      description: |-
+        Caso de uso: `ConsultarLlegadasPrevistasUseCase`.
+
+        Roles permitidos: `ADMIN`, `RECEPCION`.
+      parameters:
+      - name: fecha
+        in: query
+        required: true
+        description: Fecha de entrada
+        schema:
+          type: string
+          format: date
+      - name: pagina
+        in: query
+        required: false
+        description: Número de página, desde 0. El tamaño es fijo (10).
+        schema:
+          type: integer
+          default: 0
+          minimum: 0
+      responses:
+        '200':
+          description: Página de reservas que llegan ese día
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginaReservaResumenResponse'
+        '400':
+          $ref: '#/components/responses/DatosInvalidos'
+        '401':
+          $ref: '#/components/responses/NoAutenticado'
+        '403':
+          $ref: '#/components/responses/Prohibido'
+        '500':
+          $ref: '#/components/responses/ErrorInterno'
+  /api/reservas/salidas:
+    get:
+      tags:
+      - Reservas
+      summary: Salidas previstas de un día
+      operationId: consultarSalidasPrevistas
+      description: |-
+        Caso de uso: `ConsultarSalidasPrevistasUseCase`.
+
+        Roles permitidos: `ADMIN`, `RECEPCION`.
+      parameters:
+      - name: fecha
+        in: query
+        required: true
+        description: Fecha de salida
+        schema:
+          type: string
+          format: date
+      - name: pagina
+        in: query
+        required: false
+        description: Número de página, desde 0. El tamaño es fijo (10).
+        schema:
+          type: integer
+          default: 0
+          minimum: 0
+      responses:
+        '200':
+          description: Página de reservas que salen ese día
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginaReservaResumenResponse'
+        '400':
+          $ref: '#/components/responses/DatosInvalidos'
+        '401':
+          $ref: '#/components/responses/NoAutenticado'
+        '403':
+          $ref: '#/components/responses/Prohibido'
+        '500':
+          $ref: '#/components/responses/ErrorInterno'
+  /api/reservas/{codigo}/confirmacion:
+    post:
+      tags:
+      - Reservas
+      summary: Confirmar una reserva
+      operationId: confirmarReserva
+      description: |-
+        Caso de uso: `ConfirmarReservaUseCase`.
+
+        Roles permitidos: `ADMIN`, `RECEPCION`.
+      parameters:
+      - name: codigo
+        in: path
+        required: true
+        description: Código de la reserva, p. ej. RES-2026-00001
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Reserva confirmada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReservaDetalleResponse'
+        '401':
+          $ref: '#/components/responses/NoAutenticado'
+        '403':
+          $ref: '#/components/responses/Prohibido'
+        '404':
+          $ref: '#/components/responses/NoEncontrado'
+        '409':
+          description: |-
+            La operación viola una regla de negocio:
+            - RN-08: solo se confirma desde PENDIENTE
+            - RN-09: falta la hora estimada de llegada
+            - RN-21: la reserva superó el plazo de confirmación
+            - Falta el pago del anticipo configurado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          $ref: '#/components/responses/ErrorInterno'
+  /api/reservas/{codigo}/cancelacion:
+    post:
+      tags:
+      - Reservas
+      summary: Cancelar una reserva
+      operationId: cancelarReserva
+      description: |-
+        Caso de uso: `CancelarReservaUseCase`.
+
+        Roles permitidos: `ADMIN`, `RECEPCION`.
+      parameters:
+      - name: codigo
+        in: path
+        required: true
+        description: Código de la reserva, p. ej. RES-2026-00001
+        schema:
+          type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CancelarReservaRequest'
+            example:
+              motivo: El huésped cambió sus fechas de viaje
+      responses:
+        '200':
+          description: Cancelada; retorna la retención según la política congelada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LiquidacionPoliticaResponse'
+        '400':
+          $ref: '#/components/responses/DatosInvalidos'
+        '401':
+          $ref: '#/components/responses/NoAutenticado'
+        '403':
+          $ref: '#/components/responses/Prohibido'
+        '404':
+          $ref: '#/components/responses/NoEncontrado'
+        '409':
+          description: |-
+            La operación viola una regla de negocio:
+            - RN-08: solo se cancela desde PENDIENTE o CONFIRMADA (no desde EN_CURSO ni estados finales)
+            - RN-12: al cancelar la reserva deja de ser activa y libera sus noches
+            - RN-13 / RN-22: la retención se calcula con la versión de la política congelada en la reserva
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          $ref: '#/components/responses/ErrorInterno'
+  /api/reservas/{codigo}/llegada:
+    post:
+      tags:
+      - Reservas
+      summary: Registrar la llegada del grupo (check-in)
+      operationId: registrarLlegada
+      description: |-
+        Caso de uso: `RegistrarLlegadaUseCase`.
+
+        Roles permitidos: `ADMIN`, `RECEPCION`.
+      parameters:
+      - name: codigo
+        in: path
+        required: true
+        description: Código de la reserva, p. ej. RES-2026-00001
+        schema:
+          type: string
+      responses:
+        '204':
+          description: Llegada registrada; la reserva pasa a EN_CURSO
+        '401':
+          $ref: '#/components/responses/NoAutenticado'
+        '403':
+          $ref: '#/components/responses/Prohibido'
+        '404':
+          $ref: '#/components/responses/NoEncontrado'
+        '409':
+          description: |-
+            La operación viola una regla de negocio:
+            - RN-08 / RN-10: solo desde CONFIRMADA y no antes de la fecha de entrada
+            - RN-11: el apartamento debe estar activo y PREPARADO
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          $ref: '#/components/responses/ErrorInterno'
+  /api/reservas/{codigo}/salida:
+    post:
+      tags:
+      - Reservas
+      summary: Registrar la salida del grupo (check-out)
+      operationId: registrarSalida
+      description: |-
+        Caso de uso: `RegistrarSalidaUseCase`.
+
+        Roles permitidos: `ADMIN`, `RECEPCION`.
+      parameters:
+      - name: codigo
+        in: path
+        required: true
+        description: Código de la reserva, p. ej. RES-2026-00001
+        schema:
+          type: string
+      - name: X-Autor
+        in: header
+        required: false
+        description: 'Quién autoriza el cierre con saldo pendiente. Por defecto: sistema.'
+        schema:
+          type: string
+          default: sistema
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegistrarSalidaRequest'
+      responses:
+        '204':
+          description: Salida registrada; la reserva pasa a FINALIZADA y el folio se cierra
+        '400':
+          $ref: '#/components/responses/DatosInvalidos'
+        '401':
+          $ref: '#/components/responses/NoAutenticado'
+        '403':
+          $ref: '#/components/responses/Prohibido'
+        '404':
+          $ref: '#/components/responses/NoEncontrado'
+        '409':
+          description: |-
+            La operación viola una regla de negocio:
+            - RN-08: solo puede salir una reserva EN_CURSO
+            - La salida no puede ser anterior al registro de llegada
+            - RN-17: el folio no cierra con saldo distinto de cero sin autorización (motivoAutorizacion)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          $ref: '#/components/responses/ErrorInterno'
+  /api/reservas/{codigo}/no-show:
+    post:
+      tags:
+      - Reservas
+      summary: Declarar no-show
+      operationId: declararNoShow
+      description: |-
+        Caso de uso: `DeclararNoShowUseCase`.
+
+        Roles permitidos: `ADMIN`, `RECEPCION`.
+      parameters:
+      - name: codigo
+        in: path
+        required: true
+        description: Código de la reserva, p. ej. RES-2026-00001
+        schema:
+          type: string
+      responses:
+        '200':
+          description: No-show declarado; retorna la retención
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LiquidacionPoliticaResponse'
+        '401':
+          $ref: '#/components/responses/NoAutenticado'
+        '403':
+          $ref: '#/components/responses/Prohibido'
+        '404':
+          $ref: '#/components/responses/NoEncontrado'
+        '409':
+          description: |-
+            La operación viola una regla de negocio:
+            - RN-08: solo desde CONFIRMADA
+            - Solo desde la hora límite de no-show del día de entrada
+            - La retención aplica el porcentaje de no-show de la política congelada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          $ref: '#/components/responses/ErrorInterno'
+  /api/reservas/vencer-pendientes:
+    post:
+      tags:
+      - Reservas
+      summary: Cancelar las reservas PENDIENTES que superaron el plazo
+      operationId: vencerReservasPendientes
+      description: |-
+        Caso de uso: `VencerReservasPendientesUseCase`.
+
+        Roles permitidos: `ADMIN`, `RECEPCION`.
+
+        RN-21. Normalmente lo dispara la tarea programada; el endpoint permite ejecutarlo a demanda.
+      responses:
+        '200':
+          description: Reservas canceladas en esta ejecución
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ReservaResumenResponse'
+        '401':
+          $ref: '#/components/responses/NoAutenticado'
+        '403':
+          $ref: '#/components/responses/Prohibido'
+        '409':
+          $ref: '#/components/responses/ReglaDeNegocio'
+        '500':
+          $ref: '#/components/responses/ErrorInterno'
+  /api/reservas/{codigoReserva}/recordatorios:
+    post:
+      tags:
+      - Recordatorios
+      summary: Programar un recordatorio
+      operationId: programarRecordatorio
+      description: |-
+        Caso de uso: `ProgramarRecordatorioUseCase`.
+
+        Roles permitidos: `ADMIN`, `RECEPCION`.
+      parameters:
+      - name: codigoReserva
+        in: path
+        required: true
+        description: Código de la reserva
+        schema:
+          type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProgramarRecordatorioRequest'
+            example:
+              tipo: ENTRADA
+      responses:
+        '201':
+          description: Recordatorio programado
+          headers:
+            Location:
+              description: URL del recurso creado
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RecordatorioResponse'
+        '400':
+          $ref: '#/components/responses/DatosInvalidos'
+        '401':
+          $ref: '#/components/responses/NoAutenticado'
+        '403':
+          $ref: '#/components/responses/Prohibido'
+        '404':
+          $ref: '#/components/responses/NoEncontrado'
+        '409':
+          description: |-
+            La operación viola una regla de negocio:
+            - RN-25: la reserva ya tiene un recordatorio de ese tipo sin cancelar
+            - RN-23: solo una reserva CONFIRMADA o EN_CURSO tiene recordatorios
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          $ref: '#/components/responses/ErrorInterno'
+    get:
+      tags:
+      - Recordatorios
+      summary: Listar los recordatorios de una reserva
+      operationId: listarRecordatorios
+      description: |-
+        Caso de uso: `ConsultarRecordatoriosUseCase`.
+
+        Cualquier usuario autenticado.
+      parameters:
+      - name: codigoReserva
+        in: path
+        required: true
+        description: Código de la reserva
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Recordatorios de la reserva
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/RecordatorioResponse'
+        '401':
+          $ref: '#/components/responses/NoAutenticado'
+        '404':
+          $ref: '#/components/responses/NoEncontrado'
+        '500':
+          $ref: '#/components/responses/ErrorInterno'
+  /api/folios/{codigoReserva}:
+    get:
+      tags:
+      - Folios
+      summary: Consultar el folio de una reserva
+      operationId: consultarFolio
+      description: |-
+        Caso de uso: `ConsultarFolioUseCase`.
+
+        Roles permitidos: `ADMIN`, `RECEPCION`.
+      parameters:
+      - name: codigoReserva
+        in: path
+        required: true
+        description: Código de la reserva
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Folio con cargos, pagos y saldo
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FolioResponse'
+        '401':
+          $ref: '#/components/responses/NoAutenticado'
+        '403':
+          $ref: '#/components/responses/Prohibido'
+        '404':
+          $ref: '#/components/responses/NoEncontrado'
+        '500':
+          $ref: '#/components/responses/ErrorInterno'
+  /api/folios/{codigoReserva}/propio:
+    get:
+      tags:
+      - Folios
+      summary: El huésped consulta su propio folio
+      operationId: consultarFolioPropio
+      description: |-
+        Caso de uso: `ConsultarFolioPropioUseCase`.
+
+        Roles permitidos: `ADMIN`, `RECEPCION`, `HUESPED`.
+
+        Responde 404 también cuando la reserva existe pero pertenece a otro titular (no revela su existencia).
+      parameters:
+      - name: codigoReserva
+        in: path
+        required: true
+        description: Código de la reserva
+        schema:
+          type: string
+      - name: codigoTitular
+        in: query
+        required: true
+        description: Titular dueño de la reserva
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Folio de la reserva del titular
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FolioResponse'
+        '400':
+          $ref: '#/components/responses/DatosInvalidos'
+        '401':
+          $ref: '#/components/responses/NoAutenticado'
+        '403':
+          $ref: '#/components/responses/Prohibido'
+        '404':
+          $ref: '#/components/responses/NoEncontrado'
+        '500':
+          $ref: '#/components/responses/ErrorInterno'
+  /api/folios/{codigoReserva}/pagos:
+    post:
+      tags:
+      - Folios
+      summary: Registrar un pago (RN-15)
+      operationId: registrarPago
+      description: |-
+        Caso de uso: `RegistrarPagoUseCase`.
+
+        Roles permitidos: `ADMIN`, `RECEPCION`.
+      parameters:
+      - name: codigoReserva
+        in: path
+        required: true
+        description: Código de la reserva
+        schema:
+          type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegistrarPagoRequest'
+            example:
+              monto: 300000
+              medioPago: EFECTIVO
+              fecha: '2026-12-19'
+      responses:
+        '201':
+          description: Pago registrado
+          headers:
+            Location:
+              description: URL del recurso creado
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MovimientoPagoResponse'
+        '400':
+          $ref: '#/components/responses/DatosInvalidos'
+        '401':
+          $ref: '#/components/responses/NoAutenticado'
+        '403':
+          $ref: '#/components/responses/Prohibido'
+        '404':
+          $ref: '#/components/responses/NoEncontrado'
+        '409':
+          description: |-
+            La operación viola una regla de negocio:
+            - El folio está cerrado y no admite más movimientos
+            - El monto no es un valor entero en pesos
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          $ref: '#/components/responses/ErrorInterno'
+  /api/folios/{codigoReserva}/servicios:
+    post:
+      tags:
+      - Folios
+      summary: Cargar un servicio adicional al folio
+      operationId: registrarServicioAdicional
+      description: |-
+        Caso de uso: `RegistrarServicioAdicionalUseCase`.
+
+        Roles permitidos: `ADMIN`, `RECEPCION`.
+      parameters:
+      - name: codigoReserva
+        in: path
+        required: true
+        description: Código de la reserva
+        schema:
+          type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegistrarServicioAdicionalRequest'
+      responses:
+        '201':
+          description: Cargo registrado
+          headers:
+            Location:
+              description: URL del recurso creado
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MovimientoCargoResponse'
+        '400':
+          $ref: '#/components/responses/DatosInvalidos'
+        '401':
+          $ref: '#/components/responses/NoAutenticado'
+        '403':
+          $ref: '#/components/responses/Prohibido'
+        '404':
+          $ref: '#/components/responses/NoEncontrado'
+        '409':
+          description: |-
+            La operación viola una regla de negocio:
+            - Solo se cargan servicios a reservas activas
+            - El alojamiento no ofrece ese servicio o no genera cargo
+            - El folio está cerrado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          $ref: '#/components/responses/ErrorInterno'
+  /api/folios/{codigoReserva}/cargos/{numero}/reverso:
+    post:
+      tags:
+      - Folios
+      summary: Corregir un cargo con un movimiento inverso (RN-16)
+      operationId: revertirCargo
+      description: |-
+        Caso de uso: `RevertirCargoUseCase`.
+
+        Roles permitidos: `ADMIN`, `RECEPCION`.
+      parameters:
+      - name: codigoReserva
+        in: path
+        required: true
+        description: Código de la reserva
+        schema:
+          type: string
+      - name: numero
+        in: path
+        required: true
+        description: Número del movimiento dentro del folio (consecutivo desde 1)
+        schema:
+          type: integer
+          minimum: 1
+      - name: fecha
+        in: query
+        required: true
+        description: Fecha del reverso (no anterior al cargo)
+        schema:
+          type: string
+          format: date
+      responses:
+        '200':
+          description: Reverso registrado; el cargo original queda intacto
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MovimientoCargoResponse'
+        '400':
+          $ref: '#/components/responses/DatosInvalidos'
+        '401':
+          $ref: '#/components/responses/NoAutenticado'
+        '403':
+          $ref: '#/components/responses/Prohibido'
+        '404':
+          $ref: '#/components/responses/NoEncontrado'
+        '409':
+          description: |-
+            La operación viola una regla de negocio:
+            - RN-16: el cargo no existe, ya fue revertido o es un reverso
+            - El reverso no puede tener fecha anterior al cargo
+            - El folio está cerrado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          $ref: '#/components/responses/ErrorInterno'
+  /api/folios/{codigoReserva}/pagos/{numero}/reverso:
+    post:
+      tags:
+      - Folios
+      summary: Corregir un pago con un movimiento inverso (RN-16)
+      operationId: revertirPago
+      description: |-
+        Caso de uso: `RevertirPagoUseCase`.
+
+        Roles permitidos: `ADMIN`, `RECEPCION`.
+      parameters:
+      - name: codigoReserva
+        in: path
+        required: true
+        description: Código de la reserva
+        schema:
+          type: string
+      - name: numero
+        in: path
+        required: true
+        description: Número del movimiento dentro del folio (consecutivo desde 1)
+        schema:
+          type: integer
+          minimum: 1
+      - name: fecha
+        in: query
+        required: true
+        description: Fecha del reverso (no anterior al pago)
+        schema:
+          type: string
+          format: date
+      responses:
+        '200':
+          description: Reverso registrado; el pago original queda intacto
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MovimientoPagoResponse'
+        '400':
+          $ref: '#/components/responses/DatosInvalidos'
+        '401':
+          $ref: '#/components/responses/NoAutenticado'
+        '403':
+          $ref: '#/components/responses/Prohibido'
+        '404':
+          $ref: '#/components/responses/NoEncontrado'
+        '409':
+          description: |-
+            La operación viola una regla de negocio:
+            - RN-16: el pago no existe, ya fue revertido o es un reverso
+            - El folio está cerrado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          $ref: '#/components/responses/ErrorInterno'
+  /api/folios/{codigoReserva}/cierre:
+    post:
+      tags:
+      - Folios
+      summary: Cerrar el folio (RN-17)
+      operationId: cerrarFolio
+      description: |-
+        Caso de uso: `CerrarFolioUseCase`.
+
+        Roles permitidos: `ADMIN`, `RECEPCION`.
+      parameters:
+      - name: codigoReserva
+        in: path
+        required: true
+        description: Código de la reserva
+        schema:
+          type: string
+      - name: X-Autor
+        in: header
+        required: false
+        description: 'Quién autoriza el cierre con saldo pendiente. Por defecto: administrador.'
+        schema:
+          type: string
+          default: administrador
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CerrarFolioRequest'
+      responses:
+        '204':
+          description: Folio cerrado
+        '400':
+          $ref: '#/components/responses/DatosInvalidos'
+        '401':
+          $ref: '#/components/responses/NoAutenticado'
+        '403':
+          $ref: '#/components/responses/Prohibido'
+        '404':
+          $ref: '#/components/responses/NoEncontrado'
+        '409':
+          description: |-
+            La operación viola una regla de negocio:
+            - RN-17: saldo distinto de cero sin motivoAutorizacion
+            - El folio ya está cerrado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          $ref: '#/components/responses/ErrorInterno'
+  /api/titulares:
+    post:
+      tags:
+      - Titulares
+      summary: Registrar un titular
+      operationId: registrarTitular
+      description: |-
+        Caso de uso: `RegistrarTitularUseCase`.
+
+        Roles permitidos: `ADMIN`, `RECEPCION`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegistrarTitularRequest'
+      responses:
+        '201':
+          description: Titular registrado
+          headers:
+            Location:
+              description: URL del recurso creado
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TitularResponse'
+        '400':
+          $ref: '#/components/responses/DatosInvalidos'
+        '401':
+          $ref: '#/components/responses/NoAutenticado'
+        '403':
+          $ref: '#/components/responses/Prohibido'
+        '409':
+          description: |-
+            La operación viola una regla de negocio:
+            - Ya existe un titular con ese código
+            - Faltan datos obligatorios del titular o el correo no es válido
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          $ref: '#/components/responses/ErrorInterno'
+  /api/titulares/{codigo}:
+    put:
+      tags:
+      - Titulares
+      summary: Actualizar teléfono y correo del titular
+      operationId: actualizarTitular
+      description: |-
+        Caso de uso: `ActualizarTitularUseCase`.
+
+        Roles permitidos: `ADMIN`, `RECEPCION`.
+      parameters:
+      - name: codigo
+        in: path
+        required: true
+        description: Código del titular
+        schema:
+          type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ActualizarTitularRequest'
+      responses:
+        '200':
+          description: Titular actualizado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TitularResponse'
+        '400':
+          $ref: '#/components/responses/DatosInvalidos'
+        '401':
+          $ref: '#/components/responses/NoAutenticado'
+        '403':
+          $ref: '#/components/responses/Prohibido'
+        '404':
+          $ref: '#/components/responses/NoEncontrado'
+        '409':
+          description: |-
+            La operación viola una regla de negocio:
+            - El teléfono y el correo (válido) son obligatorios
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          $ref: '#/components/responses/ErrorInterno'
+  /api/apartamentos:
+    post:
+      tags:
+      - Apartamentos
+      summary: Crear un apartamento (nace inactivo)
+      operationId: crearApartamento
+      description: |-
+        Caso de uso: `CrearApartamentoUseCase`.
+
+        Roles permitidos: `ADMIN`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CrearApartamentoRequest'
+      responses:
+        '201':
+          description: Apartamento creado
+          headers:
+            Location:
+              description: URL del recurso creado
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApartamentoResponse'
+        '400':
+          $ref: '#/components/responses/DatosInvalidos'
+        '401':
+          $ref: '#/components/responses/NoAutenticado'
+        '403':
+          $ref: '#/components/responses/Prohibido'
+        '409':
+          description: |-
+            La operación viola una regla de negocio:
+            - L-04: ya existe un apartamento con esa identificación
+            - La galería debe tener entre 1 y 10 imágenes
+            - Dormitorios y capacidad deben ser al menos 1
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          $ref: '#/components/responses/ErrorInterno'
+    get:
+      tags:
+      - Apartamentos
+      summary: Listar apartamentos activos (público)
+      operationId: listarApartamentosActivos
+      description: |-
+        Caso de uso: `ConsultarApartamentosActivosUseCase`.
+
+        Público (no requiere token).
+      parameters:
+      - name: pagina
+        in: query
+        required: false
+        description: Número de página, desde 0. El tamaño es fijo (10).
+        schema:
+          type: integer
+          default: 0
+          minimum: 0
+      responses:
+        '200':
+          description: Página de apartamentos activos
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginaApartamentoResponse'
+        '400':
+          $ref: '#/components/responses/DatosInvalidos'
+        '500':
+          $ref: '#/components/responses/ErrorInterno'
+      security: []
+  /api/apartamentos/pendientes-preparacion:
+    get:
+      tags:
+      - Apartamentos
+      summary: Apartamentos pendientes de preparación
+      operationId: listarApartamentosPendientesDePreparacion
+      description: |-
+        Caso de uso: `ConsultarPendientesPreparacionUseCase`.
+
+        Cualquier usuario autenticado.
+      parameters:
+      - name: pagina
+        in: query
+        required: false
+        description: Número de página, desde 0. El tamaño es fijo (10).
+        schema:
+          type: integer
+          default: 0
+          minimum: 0
+      responses:
+        '200':
+          description: Página de apartamentos
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginaApartamentoResponse'
+        '400':
+          $ref: '#/components/responses/DatosInvalidos'
+        '401':
+          $ref: '#/components/responses/NoAutenticado'
+        '500':
+          $ref: '#/components/responses/ErrorInterno'
+  /api/apartamentos/{identificacion}:
+    get:
+      tags:
+      - Apartamentos
+      summary: Consultar la ficha de un apartamento
+      operationId: consultarApartamento
+      description: |-
+        Caso de uso: `ConsultarApartamentoUseCase`.
+
+        Cualquier usuario autenticado.
+      parameters:
+      - name: identificacion
+        in: path
+        required: true
+        description: Identificación del apartamento (L-04), p. ej. APT-301
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Apartamento encontrado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApartamentoResponse'
+        '401':
+          $ref: '#/components/responses/NoAutenticado'
+        '404':
+          $ref: '#/components/responses/NoEncontrado'
+        '500':
+          $ref: '#/components/responses/ErrorInterno'
+    put:
+      tags:
+      - Apartamentos
+      summary: Actualizar datos, galería y dotación
+      operationId: actualizarApartamento
+      description: |-
+        Caso de uso: `ActualizarApartamentoUseCase`.
+
+        Roles permitidos: `ADMIN`.
+      parameters:
+      - name: identificacion
+        in: path
+        required: true
+        description: Identificación del apartamento (L-04), p. ej. APT-301
+        schema:
+          type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ActualizarApartamentoRequest'
+      responses:
+        '200':
+          description: Apartamento actualizado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApartamentoResponse'
+        '400':
+          $ref: '#/components/responses/DatosInvalidos'
+        '401':
+          $ref: '#/components/responses/NoAutenticado'
+        '403':
+          $ref: '#/components/responses/Prohibido'
+        '404':
+          $ref: '#/components/responses/NoEncontrado'
+        '409':
+          description: |-
+            La operación viola una regla de negocio:
+            - L-04: la identificación es estable y no se modifica
+            - La galería debe tener entre 1 y 10 imágenes
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          $ref: '#/components/responses/ErrorInterno'
+  /api/apartamentos/{identificacion}/activacion:
+    post:
+      tags:
+      - Apartamentos
+      summary: Activar el apartamento para la venta
+      operationId: activarApartamento
+      description: |-
+        Caso de uso: `ActivarApartamentoUseCase`.
+
+        Roles permitidos: `ADMIN`.
+      parameters:
+      - name: identificacion
+        in: path
+        required: true
+        description: Identificación del apartamento (L-04), p. ej. APT-301
+        schema:
+          type: string
+      responses:
+        '204':
+          description: Apartamento activo
+        '401':
+          $ref: '#/components/responses/NoAutenticado'
+        '403':
+          $ref: '#/components/responses/Prohibido'
+        '404':
+          $ref: '#/components/responses/NoEncontrado'
+        '409':
+          description: |-
+            La operación viola una regla de negocio:
+            - 7.4: no se activa sin tarifa en todas las temporadas
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          $ref: '#/components/responses/ErrorInterno'
+  /api/apartamentos/{identificacion}/retiro:
+    post:
+      tags:
+      - Apartamentos
+      summary: Retirar el apartamento de la venta (baja lógica)
+      operationId: retirarApartamentoDeVenta
+      description: |-
+        Caso de uso: `RetirarApartamentoUseCase`.
+
+        Roles permitidos: `ADMIN`.
+      parameters:
+      - name: identificacion
+        in: path
+        required: true
+        description: Identificación del apartamento (L-04), p. ej. APT-301
+        schema:
+          type: string
+      responses:
+        '204':
+          description: Apartamento inactivo
+        '401':
+          $ref: '#/components/responses/NoAutenticado'
+        '403':
+          $ref: '#/components/responses/Prohibido'
+        '404':
+          $ref: '#/components/responses/NoEncontrado'
+        '409':
+          description: |-
+            La operación viola una regla de negocio:
+            - 7.3: no se retira con reservas activas o futuras
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          $ref: '#/components/responses/ErrorInterno'
+  /api/apartamentos/{identificacion}/capacidad:
+    post:
+      tags:
+      - Apartamentos
+      summary: Cambiar la capacidad del apartamento
+      operationId: cambiarCapacidadApartamento
+      description: |-
+        Caso de uso: `CambiarCapacidadApartamentoUseCase`.
+
+        Roles permitidos: `ADMIN`.
+      parameters:
+      - name: identificacion
+        in: path
+        required: true
+        description: Identificación del apartamento (L-04), p. ej. APT-301
+        schema:
+          type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CambiarCapacidadApartamentoRequest'
+      responses:
+        '200':
+          description: 'Reservas vigentes que quedaron por encima de la nueva capacidad (se informan, no se tocan: RN-22)'
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ReservaResumenResponse'
+        '400':
+          $ref: '#/components/responses/DatosInvalidos'
+        '401':
+          $ref: '#/components/responses/NoAutenticado'
+        '403':
+          $ref: '#/components/responses/Prohibido'
+        '404':
+          $ref: '#/components/responses/NoEncontrado'
+        '409':
+          description: |-
+            La operación viola una regla de negocio:
+            - La capacidad debe admitir al menos una persona
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          $ref: '#/components/responses/ErrorInterno'
+  /api/apartamentos/{identificacion}/tarifas:
+    post:
+      tags:
+      - Apartamentos
+      summary: Definir o reemplazar la tarifa de una temporada
+      operationId: definirTarifa
+      description: |-
+        Caso de uso: `DefinirTarifaUseCase`.
+
+        Roles permitidos: `ADMIN`.
+      parameters:
+      - name: identificacion
+        in: path
+        required: true
+        description: Identificación del apartamento (L-04), p. ej. APT-301
+        schema:
+          type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DefinirTarifaRequest'
+      responses:
+        '204':
+          description: Tarifa definida (queda histórico)
+        '400':
+          $ref: '#/components/responses/DatosInvalidos'
+        '401':
+          $ref: '#/components/responses/NoAutenticado'
+        '403':
+          $ref: '#/components/responses/Prohibido'
+        '404':
+          $ref: '#/components/responses/NoEncontrado'
+        '409':
+          description: |-
+            La operación viola una regla de negocio:
+            - La tarifa debe ser mayor que cero y en pesos enteros
+            - La temporada no existe en el alojamiento
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          $ref: '#/components/responses/ErrorInterno'
+    get:
+      tags:
+      - Apartamentos
+      summary: Consultar las tarifas vigentes por temporada
+      operationId: consultarTarifas
+      description: |-
+        Caso de uso: `ConsultarTarifasApartamentoUseCase`.
+
+        Cualquier usuario autenticado.
+      parameters:
+      - name: identificacion
+        in: path
+        required: true
+        description: Identificación del apartamento (L-04), p. ej. APT-301
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Tarifas vigentes
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/TarifaResponse'
+        '401':
+          $ref: '#/components/responses/NoAutenticado'
+        '404':
+          $ref: '#/components/responses/NoEncontrado'
+        '500':
+          $ref: '#/components/responses/ErrorInterno'
+  /api/apartamentos/{identificacion}/preparacion/inicio:
+    post:
+      tags:
+      - Apartamentos
+      summary: Iniciar la preparación del apartamento
+      operationId: iniciarPreparacion
+      description: |-
+        Caso de uso: `IniciarPreparacionUseCase`.
+
+        Roles permitidos: `ADMIN`, `SERVICIO`.
+      parameters:
+      - name: identificacion
+        in: path
+        required: true
+        description: Identificación del apartamento (L-04), p. ej. APT-301
+        schema:
+          type: string
+      responses:
+        '204':
+          description: Apartamento EN_PREPARACION
+        '401':
+          $ref: '#/components/responses/NoAutenticado'
+        '403':
+          $ref: '#/components/responses/Prohibido'
+        '404':
+          $ref: '#/components/responses/NoEncontrado'
+        '409':
+          description: |-
+            La operación viola una regla de negocio:
+            - F-09: solo se inicia desde PENDIENTE_PREPARACION
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          $ref: '#/components/responses/ErrorInterno'
+  /api/apartamentos/{identificacion}/preparacion/fin:
+    post:
+      tags:
+      - Apartamentos
+      summary: Finalizar la preparación (queda PREPARADO)
+      operationId: finalizarPreparacion
+      description: |-
+        Caso de uso: `FinalizarPreparacionUseCase`.
+
+        Roles permitidos: `ADMIN`, `SERVICIO`.
+      parameters:
+      - name: identificacion
+        in: path
+        required: true
+        description: Identificación del apartamento (L-04), p. ej. APT-301
+        schema:
+          type: string
+      responses:
+        '204':
+          description: Apartamento PREPARADO
+        '401':
+          $ref: '#/components/responses/NoAutenticado'
+        '403':
+          $ref: '#/components/responses/Prohibido'
+        '404':
+          $ref: '#/components/responses/NoEncontrado'
+        '409':
+          description: |-
+            La operación viola una regla de negocio:
+            - F-09: solo se finaliza desde EN_PREPARACION o FUERA_DE_SERVICIO
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          $ref: '#/components/responses/ErrorInterno'
+  /api/apartamentos/{identificacion}/fuera-de-servicio:
+    post:
+      tags:
+      - Apartamentos
+      summary: Declarar el apartamento fuera de servicio
+      operationId: declararFueraDeServicio
+      description: |-
+        Caso de uso: `DeclararFueraDeServicioUseCase`.
+
+        Roles permitidos: `ADMIN`.
+      parameters:
+      - name: identificacion
+        in: path
+        required: true
+        description: Identificación del apartamento (L-04), p. ej. APT-301
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Reservas afectadas que deben reubicarse
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ReservaResumenResponse'
+        '401':
+          $ref: '#/components/responses/NoAutenticado'
+        '403':
+          $ref: '#/components/responses/Prohibido'
+        '404':
+          $ref: '#/components/responses/NoEncontrado'
+        '409':
+          description: |-
+            La operación viola una regla de negocio:
+            - 7.6: no se declara fuera de servicio un apartamento OCUPADO ni uno que ya lo está
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          $ref: '#/components/responses/ErrorInterno'
+  /api/apartamentos/{identificacion}/reintegracion:
+    post:
+      tags:
+      - Apartamentos
+      summary: Reintegrar un apartamento fuera de servicio
+      operationId: reintegrarApartamento
+      description: |-
+        Caso de uso: `ReintegrarAlServicioUseCase`.
+
+        Roles permitidos: `ADMIN`.
+      parameters:
+      - name: identificacion
+        in: path
+        required: true
+        description: Identificación del apartamento (L-04), p. ej. APT-301
+        schema:
+          type: string
+      responses:
+        '204':
+          description: Apartamento PREPARADO de nuevo
+        '401':
+          $ref: '#/components/responses/NoAutenticado'
+        '403':
+          $ref: '#/components/responses/Prohibido'
+        '404':
+          $ref: '#/components/responses/NoEncontrado'
+        '409':
+          description: |-
+            La operación viola una regla de negocio:
+            - F-09: solo se reintegra desde FUERA_DE_SERVICIO
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          $ref: '#/components/responses/ErrorInterno'
+  /api/alojamiento:
+    get:
+      tags:
+      - Alojamiento
+      summary: Consultar la ficha del alojamiento (público)
+      operationId: consultarAlojamiento
+      description: |-
+        Caso de uso: `ConsultarAlojamientoUseCase`.
+
+        Público (no requiere token).
+      responses:
+        '200':
+          description: Ficha, configuración, normas y servicios
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AlojamientoResponse'
+        '500':
+          $ref: '#/components/responses/ErrorInterno'
+      security: []
+  /api/alojamiento/datos:
+    put:
+      tags:
+      - Alojamiento
+      summary: Actualizar nombre, descripción y ubicación
+      operationId: actualizarDatosAlojamiento
+      description: |-
+        Caso de uso: `ActualizarDatosAlojamientoUseCase`.
+
+        Roles permitidos: `ADMIN`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ActualizarDatosAlojamientoRequest'
+      responses:
+        '200':
+          description: Alojamiento actualizado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AlojamientoResponse'
+        '400':
+          $ref: '#/components/responses/DatosInvalidos'
+        '401':
+          $ref: '#/components/responses/NoAutenticado'
+        '403':
+          $ref: '#/components/responses/Prohibido'
+        '409':
+          description: |-
+            La operación viola una regla de negocio:
+            - Latitud ±90 y longitud ±180 válidas
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          $ref: '#/components/responses/ErrorInterno'
+  /api/alojamiento/configuracion:
+    put:
+      tags:
+      - Alojamiento
+      summary: Actualizar la configuración operativa
+      operationId: actualizarConfiguracionAlojamiento
+      description: |-
+        Caso de uso: `ActualizarConfiguracionAlojamientoUseCase`.
+
+        Roles permitidos: `ADMIN`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ActualizarConfiguracionAlojamientoRequest'
+      responses:
+        '200':
+          description: Alojamiento actualizado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AlojamientoResponse'
+        '400':
+          $ref: '#/components/responses/DatosInvalidos'
+        '401':
+          $ref: '#/components/responses/NoAutenticado'
+        '403':
+          $ref: '#/components/responses/Prohibido'
+        '409':
+          description: |-
+            La operación viola una regla de negocio:
+            - La hora límite de no-show debe ser posterior a la hora de entrada
+            - Las antelaciones deben ser mayores que cero
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          $ref: '#/components/responses/ErrorInterno'
+  /api/alojamiento/normas:
+    put:
+      tags:
+      - Alojamiento
+      summary: Definir las normas de convivencia
+      operationId: definirNormasConvivencia
+      description: |-
+        Caso de uso: `DefinirNormasConvivenciaUseCase`.
+
+        Roles permitidos: `ADMIN`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DefinirNormasConvivenciaRequest'
+      responses:
+        '200':
+          description: Alojamiento actualizado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AlojamientoResponse'
+        '400':
+          $ref: '#/components/responses/DatosInvalidos'
+        '401':
+          $ref: '#/components/responses/NoAutenticado'
+        '403':
+          $ref: '#/components/responses/Prohibido'
+        '409':
+          $ref: '#/components/responses/ReglaDeNegocio'
+        '500':
+          $ref: '#/components/responses/ErrorInterno'
+  /api/alojamiento/servicios:
+    post:
+      tags:
+      - Alojamiento
+      summary: Agregar un servicio adicional
+      operationId: agregarServicioAdicional
+      description: |-
+        Caso de uso: `AgregarServicioAdicionalAlojamientoUseCase`.
+
+        Roles permitidos: `ADMIN`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AgregarServicioAdicionalAlojamientoRequest'
+      responses:
+        '201':
+          description: Servicio agregado
+          headers:
+            Location:
+              description: URL del recurso creado
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AlojamientoResponse'
+        '400':
+          $ref: '#/components/responses/DatosInvalidos'
+        '401':
+          $ref: '#/components/responses/NoAutenticado'
+        '403':
+          $ref: '#/components/responses/Prohibido'
+        '409':
+          description: |-
+            La operación viola una regla de negocio:
+            - Ya existe un servicio adicional con ese nombre
+            - Un servicio que genera cargo debe tener valor mayor que cero
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          $ref: '#/components/responses/ErrorInterno'
+  /api/alojamiento/temporadas:
+    get:
+      tags:
+      - Alojamiento
+      summary: Listar las temporadas
+      operationId: listarTemporadas
+      description: |-
+        Caso de uso: `ConsultarTemporadasUseCase`.
+
+        Cualquier usuario autenticado.
+      responses:
+        '200':
+          description: Temporadas (base y especiales)
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/TemporadaResponse'
+        '401':
+          $ref: '#/components/responses/NoAutenticado'
+        '500':
+          $ref: '#/components/responses/ErrorInterno'
+    post:
+      tags:
+      - Alojamiento
+      summary: Crear una temporada con sus tarifas
+      operationId: crearTemporada
+      description: |-
+        Caso de uso: `CrearTemporadaUseCase`.
+
+        Roles permitidos: `ADMIN`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CrearTemporadaRequest'
+      responses:
+        '201':
+          description: Temporada creada (cabecera Location)
+          headers:
+            Location:
+              description: URL del recurso creado
+              schema:
+                type: string
+        '400':
+          $ref: '#/components/responses/DatosInvalidos'
+        '401':
+          $ref: '#/components/responses/NoAutenticado'
+        '403':
+          $ref: '#/components/responses/Prohibido'
+        '409':
+          description: |-
+            La operación viola una regla de negocio:
+            - Una sola temporada base y mínimo dos especiales
+            - Los rangos de las temporadas no pueden solaparse
+            - Faltan tarifas de la nueva temporada para los apartamentos activos
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          $ref: '#/components/responses/ErrorInterno'
+  /api/alojamiento/temporadas/{idTemporada}/retiro:
+    post:
+      tags:
+      - Alojamiento
+      summary: Retirar una temporada
+      operationId: retirarTemporada
+      description: |-
+        Caso de uso: `RetirarTemporadaUseCase`.
+
+        Roles permitidos: `ADMIN`.
+      parameters:
+      - name: idTemporada
+        in: path
+        required: true
+        description: Identificador de la temporada
+        schema:
+          type: string
+      responses:
+        '204':
+          description: Temporada retirada
+        '401':
+          $ref: '#/components/responses/NoAutenticado'
+        '403':
+          $ref: '#/components/responses/Prohibido'
+        '409':
+          description: |-
+            La operación viola una regla de negocio:
+            - La temporada no existe en el alojamiento
+            - La temporada base no se retira
+            - Deben quedar al menos dos temporadas especiales
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          $ref: '#/components/responses/ErrorInterno'
+  /api/politicas/vigente:
+    get:
+      tags:
+      - Políticas de cancelación
+      summary: Consultar la política de cancelación vigente
+      operationId: consultarPoliticaVigente
+      description: |-
+        Caso de uso: `ConsultarPoliticaVigenteUseCase`.
+
+        Cualquier usuario autenticado.
+      responses:
+        '200':
+          description: Política vigente
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PoliticaCancelacionResponse'
+        '401':
+          $ref: '#/components/responses/NoAutenticado'
+        '404':
+          $ref: '#/components/responses/NoEncontrado'
+        '500':
+          $ref: '#/components/responses/ErrorInterno'
+  /api/politicas:
+    post:
+      tags:
+      - Políticas de cancelación
+      summary: Definir una nueva versión de la política
+      operationId: definirPoliticaCancelacion
+      description: |-
+        Caso de uso: `DefinirPoliticaCancelacionUseCase`.
+
+        Roles permitidos: `ADMIN`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DefinirPoliticaCancelacionRequest'
+      responses:
+        '201':
+          description: 'Nueva versión vigente (las reservas existentes conservan la suya: RN-22)'
+          headers:
+            Location:
+              description: URL del recurso creado
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PoliticaCancelacionResponse'
+        '400':
+          $ref: '#/components/responses/DatosInvalidos'
+        '401':
+          $ref: '#/components/responses/NoAutenticado'
+        '403':
+          $ref: '#/components/responses/Prohibido'
+        '409':
+          description: |-
+            La operación viola una regla de negocio:
+            - RN-13: los tramos deben ser coherentes (al menos dos, de mayor a menor antelación)
+            - Los porcentajes de retención van de 0 a 100
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          $ref: '#/components/responses/ErrorInterno'
+  /api/bloqueos:
+    post:
+      tags:
+      - Bloqueos
+      summary: Bloquear un rango de noches de un apartamento
+      operationId: registrarBloqueo
+      description: |-
+        Caso de uso: `RegistrarBloqueoUseCase`.
+
+        Roles permitidos: `ADMIN`, `RECEPCION`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegistrarBloqueoRequest'
+      responses:
+        '201':
+          description: Bloqueo registrado
+          headers:
+            Location:
+              description: URL del recurso creado
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BloqueoResponse'
+        '400':
+          $ref: '#/components/responses/DatosInvalidos'
+        '401':
+          $ref: '#/components/responses/NoAutenticado'
+        '403':
+          $ref: '#/components/responses/Prohibido'
+        '404':
+          $ref: '#/components/responses/NoEncontrado'
+        '409':
+          description: |-
+            La operación viola una regla de negocio:
+            - RN-07: el rango no puede tener reservas activas en esas noches
+            - La fecha final debe ser posterior a la inicial
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          $ref: '#/components/responses/ErrorInterno'
+    get:
+      tags:
+      - Bloqueos
+      summary: Bloqueos vigentes de un apartamento
+      operationId: consultarBloqueos
+      description: |-
+        Caso de uso: `ConsultarBloqueosUseCase`.
+
+        Cualquier usuario autenticado.
+      parameters:
+      - name: identificacion
+        in: query
+        required: true
+        description: Identificación del apartamento
+        schema:
+          type: string
+      - name: pagina
+        in: query
+        required: false
+        description: Número de página, desde 0. El tamaño es fijo (10).
+        schema:
+          type: integer
+          default: 0
+          minimum: 0
+      responses:
+        '200':
+          description: Página de bloqueos vigentes
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginaBloqueoResponse'
+        '400':
+          $ref: '#/components/responses/DatosInvalidos'
+        '401':
+          $ref: '#/components/responses/NoAutenticado'
+        '500':
+          $ref: '#/components/responses/ErrorInterno'
+  /api/bloqueos/{codigo}/reprogramacion:
+    post:
+      tags:
+      - Bloqueos
+      summary: Reprogramar un bloqueo
+      operationId: reprogramarBloqueo
+      description: |-
+        Caso de uso: `ReprogramarBloqueoUseCase`.
+
+        Roles permitidos: `ADMIN`, `RECEPCION`.
+      parameters:
+      - name: codigo
+        in: path
+        required: true
+        description: Código del bloqueo
+        schema:
+          type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReprogramarBloqueoRequest'
+      responses:
+        '204':
+          description: Bloqueo reprogramado
+        '400':
+          $ref: '#/components/responses/DatosInvalidos'
+        '401':
+          $ref: '#/components/responses/NoAutenticado'
+        '403':
+          $ref: '#/components/responses/Prohibido'
+        '404':
+          $ref: '#/components/responses/NoEncontrado'
+        '409':
+          description: |-
+            La operación viola una regla de negocio:
+            - El bloqueo ya fue levantado
+            - RN-07: el nuevo rango no puede tener reservas activas
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          $ref: '#/components/responses/ErrorInterno'
+  /api/bloqueos/{codigo}/levantamiento:
+    post:
+      tags:
+      - Bloqueos
+      summary: Levantar un bloqueo
+      operationId: levantarBloqueo
+      description: |-
+        Caso de uso: `LevantarBloqueoUseCase`.
+
+        Roles permitidos: `ADMIN`, `RECEPCION`.
+      parameters:
+      - name: codigo
+        in: path
+        required: true
+        description: Código del bloqueo
+        schema:
+          type: string
+      responses:
+        '204':
+          description: Bloqueo levantado; las noches quedan libres
+        '401':
+          $ref: '#/components/responses/NoAutenticado'
+        '403':
+          $ref: '#/components/responses/Prohibido'
+        '404':
+          $ref: '#/components/responses/NoEncontrado'
+        '409':
+          description: |-
+            La operación viola una regla de negocio:
+            - El bloqueo ya fue levantado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          $ref: '#/components/responses/ErrorInterno'
+  /api/disponibilidad:
+    get:
+      tags:
+      - Disponibilidad y calendario
+      summary: Buscar apartamentos disponibles (público)
+      operationId: consultarDisponibilidad
+      description: |-
+        Caso de uso: `ConsultarDisponibilidadUseCase`.
+
+        Público (no requiere token).
+
+        Solo devuelve apartamentos activos y libres para el rango (RN-01, RN-02, RN-07, RN-20).
+      parameters:
+      - name: fechaEntrada
+        in: query
+        required: true
+        description: Fecha de entrada
+        schema:
+          type: string
+          format: date
+      - name: fechaSalida
+        in: query
+        required: true
+        description: Fecha de salida
+        schema:
+          type: string
+          format: date
+      - name: fechasNacimiento
+        in: query
+        required: true
+        description: Fecha de nacimiento de cada ocupante (todos cuentan para la capacidad; solo los facturables para el valor)
+        schema:
+          type: array
+          items:
+            type: string
+            format: date
+        style: form
+        explode: true
+      - name: capacidadMinima
+        in: query
+        required: false
+        description: Capacidad mínima del apartamento
+        schema:
+          type: integer
+          minimum: 1
+      - name: precioMinimo
+        in: query
+        required: false
+        description: Valor mínimo por noche (COP)
+        schema:
+          type: integer
+          format: int64
+          minimum: 0
+      - name: precioMaximo
+        in: query
+        required: false
+        description: Valor máximo por noche (COP)
+        schema:
+          type: integer
+          format: int64
+          minimum: 0
+      - name: caracteristicas
+        in: query
+        required: false
+        description: Elementos de dotación requeridos
+        schema:
+          type: array
+          items:
+            type: string
+        style: form
+        explode: true
+      - name: servicios
+        in: query
+        required: false
+        description: Servicios adicionales requeridos
+        schema:
+          type: array
+          items:
+            type: string
+        style: form
+        explode: true
+      - name: pagina
+        in: query
+        required: false
+        description: Número de página, desde 0. El tamaño es fijo (10).
+        schema:
+          type: integer
+          default: 0
+          minimum: 0
+      responses:
+        '200':
+          description: Página de apartamentos disponibles con valor estimado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginaApartamentoDisponibleResponse'
+        '400':
+          $ref: '#/components/responses/DatosInvalidos'
+        '409':
+          description: |-
+            La operación viola una regla de negocio:
+            - RN-03: la fecha de salida no es posterior a la de entrada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          $ref: '#/components/responses/ErrorInterno'
+      security: []
+  /api/calendario:
+    get:
+      tags:
+      - Disponibilidad y calendario
+      summary: Calendario de ocupación de un apartamento
+      operationId: consultarCalendarioOcupacion
+      description: |-
+        Caso de uso: `ConsultarCalendarioOcupacionUseCase`.
+
+        Cualquier usuario autenticado.
+      parameters:
+      - name: identificacion
+        in: query
+        required: true
+        description: Identificación del apartamento
+        schema:
+          type: string
+      - name: fechaDesde
+        in: query
+        required: true
+        description: Primera noche
+        schema:
+          type: string
+          format: date
+      - name: fechaHasta
+        in: query
+        required: true
+        description: Última noche
+        schema:
+          type: string
+          format: date
+      responses:
+        '200':
+          description: Situación de cada noche del rango
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CalendarioOcupacionResponse'
+        '400':
+          $ref: '#/components/responses/DatosInvalidos'
+        '401':
+          $ref: '#/components/responses/NoAutenticado'
+        '404':
+          $ref: '#/components/responses/NoEncontrado'
+        '500':
+          $ref: '#/components/responses/ErrorInterno'
+  /api/cotizaciones:
+    post:
+      tags:
+      - Cotizaciones
+      summary: Cotizar una estancia (público)
+      operationId: cotizarEstancia
+      description: |-
+        Caso de uso: `CotizarEstanciaUseCase`.
+
+        Público (no requiere token).
+
+        Es un cálculo (no crea nada), por eso es `POST` con cuerpo y responde 200.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CotizarEstanciaRequest'
+            example:
+              identificacionApartamento: APT-301
+              fechaEntrada: '2026-12-20'
+              fechaSalida: '2026-12-23'
+              ocupantes:
+              - nombre: Ana Gómez
+                fechaNacimiento: '1990-05-05'
+              - nombre: Pedro
+                fechaNacimiento: '2023-01-10'
+      responses:
+        '200':
+          description: Cotización con desglose noche por noche
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CotizacionResponse'
+        '400':
+          $ref: '#/components/responses/DatosInvalidos'
+        '404':
+          $ref: '#/components/responses/NoEncontrado'
+        '409':
+          description: |-
+            La operación viola una regla de negocio:
+            - RN-03: salida no posterior a la entrada
+            - RN-06: ningún ocupante es facturable
+            - 7.4: el apartamento no tiene tarifa para la temporada de alguna noche
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          $ref: '#/components/responses/ErrorInterno'
+      security: []
+  /api/canales:
+    post:
+      tags:
+      - Canales externos
+      summary: Registrar un canal externo
+      operationId: registrarCanalExterno
+      description: |-
+        Caso de uso: `RegistrarCanalExternoUseCase`.
+
+        Roles permitidos: `ADMIN`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegistrarCanalExternoRequest'
+      responses:
+        '201':
+          description: Canal registrado
+          headers:
+            Location:
+              description: URL del recurso creado
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CanalExternoResponse'
+        '400':
+          $ref: '#/components/responses/DatosInvalidos'
+        '401':
+          $ref: '#/components/responses/NoAutenticado'
+        '403':
+          $ref: '#/components/responses/Prohibido'
+        '409':
+          description: |-
+            La operación viola una regla de negocio:
+            - Ya existe un canal con ese código
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          $ref: '#/components/responses/ErrorInterno'
+    get:
+      tags:
+      - Canales externos
+      summary: Listar canales externos
+      operationId: listarCanalesExternos
+      description: |-
+        Caso de uso: `ConsultarCanalesExternosUseCase`.
+
+        Roles permitidos: `ADMIN`.
+      parameters:
+      - name: pagina
+        in: query
+        required: false
+        description: Número de página, desde 0. El tamaño es fijo (10).
+        schema:
+          type: integer
+          default: 0
+          minimum: 0
+      responses:
+        '200':
+          description: Página de canales
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginaCanalExternoResponse'
+        '400':
+          $ref: '#/components/responses/DatosInvalidos'
+        '401':
+          $ref: '#/components/responses/NoAutenticado'
+        '403':
+          $ref: '#/components/responses/Prohibido'
+        '500':
+          $ref: '#/components/responses/ErrorInterno'
+  /api/canales/{codigo}/activacion:
+    post:
+      tags:
+      - Canales externos
+      summary: Activar un canal
+      operationId: activarCanalExterno
+      description: |-
+        Caso de uso: `ActivarCanalExternoUseCase`.
+
+        Roles permitidos: `ADMIN`.
+      parameters:
+      - name: codigo
+        in: path
+        required: true
+        description: Código del canal externo
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Canal activo
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CanalExternoResponse'
+        '401':
+          $ref: '#/components/responses/NoAutenticado'
+        '403':
+          $ref: '#/components/responses/Prohibido'
+        '404':
+          $ref: '#/components/responses/NoEncontrado'
+        '409':
+          $ref: '#/components/responses/ReglaDeNegocio'
+        '500':
+          $ref: '#/components/responses/ErrorInterno'
+  /api/canales/{codigo}/desactivacion:
+    post:
+      tags:
+      - Canales externos
+      summary: Desactivar un canal
+      operationId: desactivarCanalExterno
+      description: |-
+        Caso de uso: `DesactivarCanalExternoUseCase`.
+
+        Roles permitidos: `ADMIN`.
+      parameters:
+      - name: codigo
+        in: path
+        required: true
+        description: Código del canal externo
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Canal inactivo
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CanalExternoResponse'
+        '401':
+          $ref: '#/components/responses/NoAutenticado'
+        '403':
+          $ref: '#/components/responses/Prohibido'
+        '404':
+          $ref: '#/components/responses/NoEncontrado'
+        '409':
+          $ref: '#/components/responses/ReglaDeNegocio'
+        '500':
+          $ref: '#/components/responses/ErrorInterno'
+  /api/canales/{codigo}/credencial:
+    post:
+      tags:
+      - Canales externos
+      summary: Rotar la credencial del canal
+      operationId: rotarCredencialCanalExterno
+      description: |-
+        Caso de uso: `RotarCredencialCanalExternoUseCase`.
+
+        Roles permitidos: `ADMIN`.
+      parameters:
+      - name: codigo
+        in: path
+        required: true
+        description: Código del canal externo
+        schema:
+          type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RotarCredencialCanalExternoRequest'
+      responses:
+        '200':
+          description: Credencial rotada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CanalExternoResponse'
+        '400':
+          $ref: '#/components/responses/DatosInvalidos'
+        '401':
+          $ref: '#/components/responses/NoAutenticado'
+        '403':
+          $ref: '#/components/responses/Prohibido'
+        '404':
+          $ref: '#/components/responses/NoEncontrado'
+        '409':
+          $ref: '#/components/responses/ReglaDeNegocio'
+        '500':
+          $ref: '#/components/responses/ErrorInterno'
+  /api/canales/{codigo}/conciliaciones:
+    post:
+      tags:
+      - Canales externos
+      summary: Conciliar una reserva que llega de un canal externo
+      operationId: conciliarReservaExterna
+      description: |-
+        Caso de uso: `ConciliarReservaExternaUseCase`.
+
+        Roles permitidos: `ADMIN`, `CANAL`.
+      parameters:
+      - name: codigo
+        in: path
+        required: true
+        description: Código del canal externo
+        schema:
+          type: string
+      - name: X-Canal-Credencial
+        in: header
+        required: true
+        description: Credencial del canal externo
+        schema:
+          type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ConciliarReservaExternaRequest'
+      responses:
+        '200':
+          description: Reserva creada o conflicto registrado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResultadoConciliacionResponse'
+        '400':
+          $ref: '#/components/responses/DatosInvalidos'
+        '401':
+          $ref: '#/components/responses/NoAutenticado'
+        '403':
+          $ref: '#/components/responses/Prohibido'
+        '404':
+          $ref: '#/components/responses/NoEncontrado'
+        '409':
+          description: |-
+            La operación viola una regla de negocio:
+            - Toda reserva externa llega con su identificador propio (base de RN-19)
+            - El canal está desactivado
+            - RN-01: si hay solapamiento no se rechaza: queda un conflicto de canal para revisión (ver `tipo` en la respuesta)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          $ref: '#/components/responses/ErrorInterno'
+  /api/canales/{codigo}/reservas/{identificadorExterno}/cancelacion:
+    post:
+      tags:
+      - Canales externos
+      summary: Cancelar una reserva por su identificador externo
+      operationId: cancelarReservaExterna
+      description: |-
+        Caso de uso: `CancelarReservaExternaUseCase`.
+
+        Roles permitidos: `ADMIN`, `CANAL`.
+      parameters:
+      - name: codigo
+        in: path
+        required: true
+        description: Código de la reserva, p. ej. RES-2026-00001
+        schema:
+          type: string
+      - name: identificadorExterno
+        in: path
+        required: true
+        description: Identificador de la reserva en el canal externo
+        schema:
+          type: string
+      - name: X-Canal-Credencial
+        in: header
+        required: true
+        description: Credencial del canal externo
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Reserva cancelada; retorna la retención. Responde 204 si la reserva ya estaba cancelada o no existía en el sistema
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LiquidacionPoliticaResponse'
+        '401':
+          $ref: '#/components/responses/NoAutenticado'
+        '403':
+          $ref: '#/components/responses/Prohibido'
+        '404':
+          $ref: '#/components/responses/NoEncontrado'
+        '409':
+          description: |-
+            La operación viola una regla de negocio:
+            - RN-08: la reserva no admite la cancelación en su estado actual
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          $ref: '#/components/responses/ErrorInterno'
+  /api/canales/conflictos:
+    get:
+      tags:
+      - Canales externos
+      summary: Listar conflictos de canal pendientes
+      operationId: listarConflictosDeCanal
+      description: |-
+        Caso de uso: `ConsultarConflictosCanalUseCase`.
+
+        Roles permitidos: `ADMIN`.
+      parameters:
+      - name: pagina
+        in: query
+        required: false
+        description: Número de página, desde 0. El tamaño es fijo (10).
+        schema:
+          type: integer
+          default: 0
+          minimum: 0
+      responses:
+        '200':
+          description: Página de conflictos
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginaConflictoCanalResponse'
+        '400':
+          $ref: '#/components/responses/DatosInvalidos'
+        '401':
+          $ref: '#/components/responses/NoAutenticado'
+        '403':
+          $ref: '#/components/responses/Prohibido'
+        '500':
+          $ref: '#/components/responses/ErrorInterno'
+  /api/novedades:
+    post:
+      tags:
+      - Novedades
+      summary: Registrar una novedad de un apartamento
+      operationId: registrarNovedad
+      description: |-
+        Caso de uso: `RegistrarNovedadUseCase`.
+
+        Roles permitidos: `ADMIN`, `SERVICIO`.
+      parameters:
+      - name: X-Autor
+        in: header
+        required: false
+        description: 'Quién registra la novedad. Por defecto: personal.'
+        schema:
+          type: string
+          default: personal
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegistrarNovedadRequest'
+      responses:
+        '201':
+          description: Novedad registrada
+          headers:
+            Location:
+              description: URL del recurso creado
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NovedadResponse'
+        '400':
+          $ref: '#/components/responses/DatosInvalidos'
+        '401':
+          $ref: '#/components/responses/NoAutenticado'
+        '403':
+          $ref: '#/components/responses/Prohibido'
+        '404':
+          $ref: '#/components/responses/NoEncontrado'
+        '409':
+          description: |-
+            La operación viola una regla de negocio:
+            - Ya existe una novedad con ese código
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          $ref: '#/components/responses/ErrorInterno'
+    get:
+      tags:
+      - Novedades
+      summary: Novedades de un apartamento
+      operationId: consultarNovedades
+      description: |-
+        Caso de uso: `ConsultarNovedadesUseCase`.
+
+        Cualquier usuario autenticado.
+      parameters:
+      - name: identificacion
+        in: query
+        required: true
+        description: Identificación del apartamento
+        schema:
+          type: string
+      - name: pagina
+        in: query
+        required: false
+        description: Número de página, desde 0. El tamaño es fijo (10).
+        schema:
+          type: integer
+          default: 0
+          minimum: 0
+      responses:
+        '200':
+          description: Página de novedades
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginaNovedadResponse'
+        '400':
+          $ref: '#/components/responses/DatosInvalidos'
+        '401':
+          $ref: '#/components/responses/NoAutenticado'
+        '500':
+          $ref: '#/components/responses/ErrorInterno'
+  /api/reportes/ingresos:
+    get:
+      tags:
+      - Reportes
+      summary: Ingresos por medio de pago en un periodo
+      operationId: reporteIngresos
+      description: |-
+        Caso de uso: `GenerarReporteIngresosUseCase`.
+
+        Roles permitidos: `ADMIN`.
+      parameters:
+      - name: fechaDesde
+        in: query
+        required: true
+        description: Inicio del periodo
+        schema:
+          type: string
+          format: date
+      - name: fechaHasta
+        in: query
+        required: true
+        description: Fin del periodo
+        schema:
+          type: string
+          format: date
+      responses:
+        '200':
+          description: Reporte de ingresos
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReporteIngresosResponse'
+        '400':
+          $ref: '#/components/responses/DatosInvalidos'
+        '401':
+          $ref: '#/components/responses/NoAutenticado'
+        '403':
+          $ref: '#/components/responses/Prohibido'
+        '409':
+          description: |-
+            La operación viola una regla de negocio:
+            - El periodo es inválido (fin anterior al inicio)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          $ref: '#/components/responses/ErrorInterno'
+  /api/reportes/ocupacion:
+    get:
+      tags:
+      - Reportes
+      summary: Porcentaje de ocupación en un periodo
+      operationId: reporteOcupacion
+      description: |-
+        Caso de uso: `GenerarReporteOcupacionUseCase`.
+
+        Roles permitidos: `ADMIN`.
+      parameters:
+      - name: fechaDesde
+        in: query
+        required: true
+        description: Inicio del periodo
+        schema:
+          type: string
+          format: date
+      - name: fechaHasta
+        in: query
+        required: true
+        description: Fin del periodo
+        schema:
+          type: string
+          format: date
+      responses:
+        '200':
+          description: Reporte de ocupación
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReporteOcupacionResponse'
+        '400':
+          $ref: '#/components/responses/DatosInvalidos'
+        '401':
+          $ref: '#/components/responses/NoAutenticado'
+        '403':
+          $ref: '#/components/responses/Prohibido'
+        '409':
+          description: |-
+            La operación viola una regla de negocio:
+            - El periodo es inválido (fin anterior al inicio)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          $ref: '#/components/responses/ErrorInterno'
+  /api/reportes/canales:
+    get:
+      tags:
+      - Reportes
+      summary: Reservas por canal en un periodo
+      operationId: reporteReservasPorCanal
+      description: |-
+        Caso de uso: `GenerarReporteReservasPorCanalUseCase`.
+
+        Roles permitidos: `ADMIN`.
+      parameters:
+      - name: fechaDesde
+        in: query
+        required: true
+        description: Inicio del periodo
+        schema:
+          type: string
+          format: date
+      - name: fechaHasta
+        in: query
+        required: true
+        description: Fin del periodo
+        schema:
+          type: string
+          format: date
+      responses:
+        '200':
+          description: Reporte por canal
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReporteReservasPorCanalResponse'
+        '400':
+          $ref: '#/components/responses/DatosInvalidos'
+        '401':
+          $ref: '#/components/responses/NoAutenticado'
+        '403':
+          $ref: '#/components/responses/Prohibido'
+        '409':
+          description: |-
+            La operación viola una regla de negocio:
+            - El periodo es inválido (fin anterior al inicio)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          $ref: '#/components/responses/ErrorInterno'
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: Token obtenido en `POST /api/auth/login`.
+  responses:
+    DatosInvalidos:
+      description: La petición no cumple el formato esperado (Bean Validation) o es una solicitud inválida
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            timestamp: '2026-12-01T10:15:30'
+            status: 400
+            error: Solicitud inválida
+            mensaje: Bean Validation rechazó el cuerpo.
+            ruta: /api/reservas
+            detalles:
+            - 'codigoTitular: El código del titular es obligatorio'
+    NoAutenticado:
+      description: Falta el token JWT o no es válido
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    Prohibido:
+      description: El rol del usuario no tiene permiso para este recurso
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    NoEncontrado:
+      description: El recurso no existe
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            timestamp: '2026-12-01T10:15:30'
+            status: 404
+            error: Recurso no encontrado
+            mensaje: No existe la reserva RES-2026-99999
+            ruta: /api/reservas/RES-2026-99999
+            detalles: []
+    ReglaDeNegocio:
+      description: La operación viola una regla de negocio o hay un conflicto con el estado actual
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            timestamp: '2026-12-01T10:15:30'
+            status: 409
+            error: Regla de dominio
+            mensaje: La fecha de entrada no puede ser anterior a hoy.
+            ruta: /api/reservas
+            detalles: []
+    ErrorInterno:
+      description: Error interno; el mensaje no expone detalle técnico
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+  schemas:
+    ActualizarApartamentoRequest:
+      type: object
+      required:
+      - identificacionApartamento
+      - nombre
+      - descripcion
+      - dormitorios
+      - imagenes
+      - indiceImagenPrincipal
+      - dotacion
+      properties:
+        identificacionApartamento:
+          type: string
+          minLength: 1
+        nombre:
+          type: string
+          minLength: 1
+        descripcion:
+          type: string
+          minLength: 1
+        dormitorios:
+          type: integer
+          minimum: 1
+        imagenes:
+          type: array
+          items:
+            type: string
+          minItems: 1
+          maxItems: 10
+        indiceImagenPrincipal:
+          type: integer
+          minimum: 0
+        dotacion:
+          type: array
+          items:
+            type: string
+    ActualizarConfiguracionAlojamientoRequest:
+      type: object
+      required:
+      - horaEntrada
+      - horaSalida
+      - tiempoPreparacionMinutos
+      - plazoConfirmacionHoras
+      - horaLimiteNoShow
+      - umbralEdadFacturable
+      - porcentajeAnticipo
+      - antelacionRecordatorioEntradaHoras
+      - antelacionRecordatorioSalidaHoras
+      properties:
+        horaEntrada:
+          type: string
+          format: time
+        horaSalida:
+          type: string
+          format: time
+        tiempoPreparacionMinutos:
+          type: integer
+          minimum: 0
+          description: 'minutos: la Ficha pide 2 h 30 min (150), que en horas enteras no cabe.'
+        plazoConfirmacionHoras:
+          type: integer
+          minimum: 1
+        horaLimiteNoShow:
+          type: string
+          format: time
+        umbralEdadFacturable:
+          type: integer
+          minimum: 0
+        porcentajeAnticipo:
+          type: integer
+          minimum: 0
+          maximum: 100
+        antelacionRecordatorioEntradaHoras:
+          type: integer
+          minimum: 1
+        antelacionRecordatorioSalidaHoras:
+          type: integer
+          minimum: 1
+    ActualizarDatosAlojamientoRequest:
+      type: object
+      required:
+      - nombre
+      - descripcion
+      - ciudad
+      - direccion
+      - latitud
+      - longitud
+      properties:
+        nombre:
+          type: string
+          minLength: 1
+        descripcion:
+          type: string
+          minLength: 1
+        ciudad:
+          type: string
+          minLength: 1
+        direccion:
+          type: string
+          minLength: 1
+        latitud:
+          type: number
+          minimum: -90
+          maximum: 90
+        longitud:
+          type: number
+          minimum: -180
+          maximum: 180
+    ActualizarTitularRequest:
+      type: object
+      required:
+      - codigoTitular
+      - telefono
+      - correo
+      properties:
+        codigoTitular:
+          type: string
+          minLength: 1
+        telefono:
+          type: string
+          minLength: 1
+        correo:
+          type: string
+          minLength: 1
+          format: email
+    AgregarServicioAdicionalAlojamientoRequest:
+      type: object
+      required:
+      - nombre
+      - valor
+      - generaCargo
+      properties:
+        nombre:
+          type: string
+          minLength: 1
+        valor:
+          type: integer
+          format: int64
+          minimum: 0
+          description: pesos, sin decimales (3.4).
+        generaCargo:
+          type: boolean
+    CambiarCapacidadApartamentoRequest:
+      type: object
+      required:
+      - identificacionApartamento
+      - nuevaCapacidad
+      properties:
+        identificacionApartamento:
+          type: string
+          minLength: 1
+        nuevaCapacidad:
+          type: integer
+          exclusiveMinimum: 0
+    CancelarReservaRequest:
+      type: object
+      required:
+      - motivo
+      properties:
+        motivo:
+          type: string
+          minLength: 1
+    CerrarFolioRequest:
+      type: object
+      properties:
+        motivoAutorizacion:
+          type: string
+    ConciliarReservaExternaRequest:
+      type: object
+      required:
+      - codigoCanal
+      - identificadorExterno
+      - codigoTitular
+      - identificacionApartamento
+      - fechaEntrada
+      - fechaSalida
+      - acompanantes
+      - horaLlegadaEstimada
+      properties:
+        codigoCanal:
+          type: string
+          minLength: 1
+        identificadorExterno:
+          type: string
+          minLength: 1
+        codigoTitular:
+          type: string
+          minLength: 1
+        identificacionApartamento:
+          type: string
+          minLength: 1
+        fechaEntrada:
+          type: string
+          format: date
+        fechaSalida:
+          type: string
+          format: date
+        acompanantes:
+          type: array
+          items:
+            $ref: '#/components/schemas/OcupanteRequest'
+        horaLlegadaEstimada:
+          type: string
+          format: time
+    CotizarEstanciaRequest:
+      type: object
+      required:
+      - identificacionApartamento
+      - fechaEntrada
+      - fechaSalida
+      - ocupantes
+      properties:
+        identificacionApartamento:
+          type: string
+          minLength: 1
+        fechaEntrada:
+          type: string
+          format: date
+        fechaSalida:
+          type: string
+          format: date
+        ocupantes:
+          type: array
+          items:
+            $ref: '#/components/schemas/OcupanteRequest'
+          minItems: 1
+    CrearApartamentoRequest:
+      type: object
+      required:
+      - identificacionApartamento
+      - nombre
+      - descripcion
+      - dormitorios
+      - capacidad
+      - imagenes
+      - indiceImagenPrincipal
+      - dotacion
+      properties:
+        identificacionApartamento:
+          type: string
+          minLength: 1
+        nombre:
+          type: string
+          minLength: 1
+        descripcion:
+          type: string
+          minLength: 1
+        dormitorios:
+          type: integer
+          minimum: 1
+        capacidad:
+          type: integer
+          minimum: 1
+        imagenes:
+          type: array
+          items:
+            type: string
+          minItems: 1
+          maxItems: 10
+        indiceImagenPrincipal:
+          type: integer
+          minimum: 0
+        dotacion:
+          type: array
+          items:
+            type: string
+    CrearReservaRequest:
+      type: object
+      required:
+      - codigoTitular
+      - identificacionApartamento
+      - fechaEntrada
+      - fechaSalida
+      - acompanantes
+      - horaLlegadaEstimada
+      - canalOrigen
+      properties:
+        codigoTitular:
+          type: string
+          minLength: 1
+        identificacionApartamento:
+          type: string
+          minLength: 1
+        fechaEntrada:
+          type: string
+          format: date
+        fechaSalida:
+          type: string
+          format: date
+        acompanantes:
+          type: array
+          items:
+            $ref: '#/components/schemas/OcupanteRequest'
+        horaLlegadaEstimada:
+          type: string
+          format: time
+        canalOrigen:
+          $ref: '#/components/schemas/CanalOrigen'
+        identificadorExterno:
+          type: string
+        mascotas:
+          type: integer
+          minimum: 0
+    CrearTemporadaRequest:
+      type: object
+      required:
+      - idTemporada
+      - nombre
+      - base
+      - periodos
+      - tarifas
+      properties:
+        idTemporada:
+          type: string
+          minLength: 1
+        nombre:
+          type: string
+          minLength: 1
+        base:
+          type: boolean
+        periodos:
+          type: array
+          items:
+            $ref: '#/components/schemas/PeriodoAnualRequest'
+        tarifas:
+          type: array
+          items:
+            $ref: '#/components/schemas/TarifaApartamentoRequest'
+    DefinirNormasConvivenciaRequest:
+      type: object
+      required:
+      - normas
+      properties:
+        normas:
+          type: array
+          items:
+            type: string
+    DefinirPoliticaCancelacionRequest:
+      type: object
+      required:
+      - tramos
+      - retencionNoShow
+      properties:
+        tramos:
+          type: array
+          items:
+            $ref: '#/components/schemas/TramoCancelacionRequest'
+          minItems: 2
+        retencionNoShow:
+          type: integer
+          minimum: 0
+          maximum: 100
+    DefinirTarifaRequest:
+      type: object
+      required:
+      - identificacionApartamento
+      - idTemporada
+      - valorPorOcupante
+      properties:
+        identificacionApartamento:
+          type: string
+          minLength: 1
+        idTemporada:
+          type: string
+          minLength: 1
+        valorPorOcupante:
+          type: number
+          exclusiveMinimum: 0
+    ModificarReservaRequest:
+      type: object
+      required:
+      - identificacionApartamento
+      - fechaEntrada
+      - fechaSalida
+      - acompanantes
+      properties:
+        identificacionApartamento:
+          type: string
+          minLength: 1
+        fechaEntrada:
+          type: string
+          format: date
+        fechaSalida:
+          type: string
+          format: date
+        acompanantes:
+          type: array
+          items:
+            $ref: '#/components/schemas/OcupanteRequest'
+        mascotas:
+          type: integer
+          minimum: 0
+    OcupanteRequest:
+      type: object
+      required:
+      - nombre
+      - fechaNacimiento
+      properties:
+        nombre:
+          type: string
+          minLength: 1
+        fechaNacimiento:
+          type: string
+          format: date
+    PeriodoAnualRequest:
+      type: object
+      required:
+      - mesInicio
+      - diaInicio
+      - mesFin
+      - diaFin
+      properties:
+        mesInicio:
+          type: integer
+        diaInicio:
+          type: integer
+        mesFin:
+          type: integer
+        diaFin:
+          type: integer
+    ProgramarRecordatorioRequest:
+      type: object
+      required:
+      - tipo
+      properties:
+        tipo:
+          $ref: '#/components/schemas/TipoRecordatorio'
+    RegistrarBloqueoRequest:
+      type: object
+      required:
+      - codigoBloqueo
+      - identificacionApartamento
+      - fechaInicio
+      - fechaFin
+      - motivo
+      properties:
+        codigoBloqueo:
+          type: string
+          minLength: 1
+        identificacionApartamento:
+          type: string
+          minLength: 1
+        fechaInicio:
+          type: string
+          format: date
+        fechaFin:
+          type: string
+          format: date
+        motivo:
+          type: string
+          minLength: 1
+    RegistrarCanalExternoRequest:
+      type: object
+      required:
+      - codigoCanal
+      - tipo
+      - credencial
+      properties:
+        codigoCanal:
+          type: string
+          minLength: 1
+        tipo:
+          type: string
+          minLength: 1
+        credencial:
+          type: string
+          minLength: 1
+    RegistrarNovedadRequest:
+      type: object
+      required:
+      - codigoNovedad
+      - identificacionApartamento
+      - descripcion
+      - gravedad
+      properties:
+        codigoNovedad:
+          type: string
+          minLength: 1
+        identificacionApartamento:
+          type: string
+          minLength: 1
+        descripcion:
+          type: string
+          minLength: 1
+        gravedad:
+          $ref: '#/components/schemas/GravedadNovedad'
+    RegistrarPagoRequest:
+      type: object
+      required:
+      - monto
+      - medioPago
+      - fecha
+      properties:
+        monto:
+          type: number
+          exclusiveMinimum: 0
+        medioPago:
+          $ref: '#/components/schemas/MedioPago'
+        fecha:
+          type: string
+          format: date
+    RegistrarSalidaRequest:
+      type: object
+      properties:
+        motivoAutorizacion:
+          type: string
+    RegistrarServicioAdicionalRequest:
+      type: object
+      required:
+      - nombreServicio
+      - fecha
+      properties:
+        nombreServicio:
+          type: string
+          minLength: 1
+        fecha:
+          type: string
+          format: date
+    RegistrarTitularRequest:
+      type: object
+      required:
+      - codigoTitular
+      - nombre
+      - fechaNacimiento
+      - telefono
+      - correo
+      properties:
+        codigoTitular:
+          type: string
+          minLength: 1
+        nombre:
+          type: string
+          minLength: 1
+        fechaNacimiento:
+          type: string
+          format: date
+          description: Debe ser una fecha en el pasado.
+        telefono:
+          type: string
+          minLength: 1
+        correo:
+          type: string
+          minLength: 1
+          format: email
+    ReprogramarBloqueoRequest:
+      type: object
+      required:
+      - nuevaFechaInicio
+      - nuevaFechaFin
+      properties:
+        nuevaFechaInicio:
+          type: string
+          format: date
+        nuevaFechaFin:
+          type: string
+          format: date
+    RotarCredencialCanalExternoRequest:
+      type: object
+      required:
+      - codigoCanal
+      - nuevaCredencial
+      properties:
+        codigoCanal:
+          type: string
+          minLength: 1
+        nuevaCredencial:
+          type: string
+          minLength: 1
+    TarifaApartamentoRequest:
+      type: object
+      required:
+      - identificacionApartamento
+      - valorPorOcupante
+      properties:
+        identificacionApartamento:
+          type: string
+          minLength: 1
+        valorPorOcupante:
+          type: number
+          exclusiveMinimum: 0
+    TramoCancelacionRequest:
+      type: object
+      required:
+      - diasAntelacionMinima
+      - porcentajeRetencion
+      properties:
+        diasAntelacionMinima:
+          type: integer
+          minimum: 0
+        porcentajeRetencion:
+          type: integer
+          minimum: 0
+          maximum: 100
+    AlojamientoResponse:
+      type: object
+      properties:
+        codigo:
+          type: string
+        nombre:
+          type: string
+        descripcion:
+          type: string
+        ciudad:
+          type: string
+        direccion:
+          type: string
+        latitud:
+          type: number
+        longitud:
+          type: number
+        configuracion:
+          $ref: '#/components/schemas/ConfiguracionAlojamientoResponse'
+        normasConvivencia:
+          type: array
+          items:
+            type: string
+        serviciosAdicionales:
+          type: array
+          items:
+            $ref: '#/components/schemas/ServicioAdicionalResponse'
+    ApartamentoDisponibleResponse:
+      type: object
+      properties:
+        identificacion:
+          type: string
+        nombre:
+          type: string
+        capacidad:
+          type: integer
+        dormitorios:
+          type: integer
+        imagenPrincipal:
+          type: string
+        valorEstimado:
+          type: integer
+          format: int64
+    ApartamentoResponse:
+      type: object
+      properties:
+        identificacion:
+          type: string
+        nombre:
+          type: string
+        descripcion:
+          type: string
+        dormitorios:
+          type: integer
+        capacidad:
+          type: integer
+        dotacion:
+          type: array
+          items:
+            type: string
+        imagenes:
+          type: array
+          items:
+            type: string
+        imagenPrincipal:
+          type: string
+        estadoOperativo:
+          $ref: '#/components/schemas/EstadoOperativo'
+        activo:
+          type: boolean
+    BloqueoResponse:
+      type: object
+      properties:
+        codigo:
+          type: string
+        identificacionApartamento:
+          type: string
+        fechaInicio:
+          type: string
+          format: date
+        fechaFin:
+          type: string
+          format: date
+        motivo:
+          type: string
+        fechaRegistro:
+          type: string
+          format: date-time
+        vigente:
+          type: boolean
+    CalendarioOcupacionResponse:
+      type: object
+      properties:
+        identificacionApartamento:
+          type: string
+        fechaDesde:
+          type: string
+          format: date
+        fechaHasta:
+          type: string
+          format: date
+        noches:
+          type: array
+          items:
+            $ref: '#/components/schemas/NocheCalendarioResponse'
+    CanalExternoResponse:
+      type: object
+      properties:
+        codigo:
+          type: string
+        tipo:
+          type: string
+        activo:
+          type: boolean
+    CargoResponse:
+      type: object
+      properties:
+        numero:
+          type: integer
+        tipo:
+          $ref: '#/components/schemas/TipoCargo'
+        concepto:
+          type: string
+        monto:
+          type: integer
+          format: int64
+        fecha:
+          type: string
+          format: date
+        esReverso:
+          type: boolean
+        revierteA:
+          type: integer
+    ConfiguracionAlojamientoResponse:
+      type: object
+      properties:
+        horaEntrada:
+          type: string
+          format: time
+        horaSalida:
+          type: string
+          format: time
+        tiempoPreparacionMinutos:
+          type: integer
+          format: int64
+        plazoConfirmacionHoras:
+          type: integer
+        horaLimiteNoShow:
+          type: string
+          format: time
+        umbralEdadFacturable:
+          type: integer
+        porcentajeAnticipo:
+          type: integer
+        antelacionRecordatorioEntradaHoras:
+          type: integer
+          format: int64
+        antelacionRecordatorioSalidaHoras:
+          type: integer
+          format: int64
+    ConflictoCanalResponse:
+      type: object
+      properties:
+        codigo:
+          type: string
+        canal:
+          $ref: '#/components/schemas/CanalOrigen'
+        identificadorExterno:
+          type: string
+        identificacionApartamento:
+          type: string
+        fechaEntrada:
+          type: string
+          format: date
+        fechaSalida:
+          type: string
+          format: date
+        codigoReservaVigente:
+          type: string
+        fechaDeteccion:
+          type: string
+          format: date-time
+        revisado:
+          type: boolean
+        notaRevision:
+          type: string
+    CotizacionResponse:
+      type: object
+      properties:
+        noches:
+          type: integer
+        total:
+          type: integer
+          format: int64
+        moneda:
+          type: string
+        desglose:
+          type: array
+          items:
+            $ref: '#/components/schemas/DesgloseNocheResponse'
+    DesgloseNocheResponse:
+      type: object
+      properties:
+        fecha:
+          type: string
+          format: date
+        temporada:
+          type: string
+        tarifaAplicada:
+          type: integer
+          format: int64
+        ocupantesFacturables:
+          type: integer
+        subtotal:
+          type: integer
+          format: int64
+    FolioResponse:
+      type: object
+      properties:
+        codigo:
+          type: string
+        codigoReserva:
+          type: string
+        cargos:
+          type: array
+          items:
+            $ref: '#/components/schemas/CargoResponse'
+        pagos:
+          type: array
+          items:
+            $ref: '#/components/schemas/PagoResponse'
+        totalCargos:
+          type: integer
+          format: int64
+        totalPagos:
+          type: integer
+          format: int64
+        saldo:
+          type: integer
+          format: int64
+        moneda:
+          type: string
+        cerrado:
+          type: boolean
+        autorCierre:
+          type: string
+          description: solo si se cerró con saldo pendiente (RN-17).
+        motivoCierre:
+          type: string
+    IngresoPorMedioResponse:
+      type: object
+      properties:
+        medio:
+          $ref: '#/components/schemas/MedioPago'
+        total:
+          type: integer
+          format: int64
+    LiquidacionPoliticaResponse:
+      type: object
+      properties:
+        codigoReserva:
+          type: string
+        retencion:
+          type: integer
+          format: int64
+        saldoFolio:
+          type: integer
+          format: int64
+        moneda:
+          type: string
+    ModificacionReservaResponse:
+      type: object
+      properties:
+        codigoReserva:
+          type: string
+        ajuste:
+          type: integer
+          format: int64
+          description: 'positivo: el huésped debe más; negativo: queda a su favor; 0: sin diferencia.'
+        moneda:
+          type: string
+    MovimientoCargoResponse:
+      type: object
+      properties:
+        codigoReserva:
+          type: string
+        cargo:
+          $ref: '#/components/schemas/CargoResponse'
+        saldo:
+          type: integer
+          format: int64
+        moneda:
+          type: string
+    MovimientoPagoResponse:
+      type: object
+      properties:
+        codigoReserva:
+          type: string
+        pago:
+          $ref: '#/components/schemas/PagoResponse'
+        saldo:
+          type: integer
+          format: int64
+        moneda:
+          type: string
+    NocheCalendarioResponse:
+      type: object
+      properties:
+        fecha:
+          type: string
+          format: date
+        situacion:
+          $ref: '#/components/schemas/SituacionNoche'
+        codigoReserva:
+          type: string
+        estadoReserva:
+          $ref: '#/components/schemas/EstadoReserva'
+        motivoBloqueo:
+          type: string
+    NovedadResponse:
+      type: object
+      properties:
+        codigo:
+          type: string
+        identificacionApartamento:
+          type: string
+        fecha:
+          type: string
+          format: date-time
+        autor:
+          type: string
+        descripcion:
+          type: string
+        gravedad:
+          $ref: '#/components/schemas/GravedadNovedad'
+        resuelta:
+          type: boolean
+        fechaResolucion:
+          type: string
+          format: date-time
+    OcupanteResponse:
+      type: object
+      properties:
+        nombre:
+          type: string
+        fechaNacimiento:
+          type: string
+          format: date
+    PagoResponse:
+      type: object
+      properties:
+        numero:
+          type: integer
+        monto:
+          type: integer
+          format: int64
+        medio:
+          $ref: '#/components/schemas/MedioPago'
+        fecha:
+          type: string
+          format: date
+        esReverso:
+          type: boolean
+        revierteA:
+          type: integer
+    PeriodoAnualResponse:
+      type: object
+      properties:
+        mesInicio:
+          type: integer
+        diaInicio:
+          type: integer
+        mesFin:
+          type: integer
+        diaFin:
+          type: integer
+    PoliticaCancelacionResponse:
+      type: object
+      properties:
+        codigo:
+          type: string
+        version:
+          type: integer
+        vigente:
+          type: boolean
+        tramos:
+          type: array
+          items:
+            $ref: '#/components/schemas/TramoCancelacionResponse'
+          description: de mayor a menor antelación.
+        retencionNoShow:
+          type: integer
+        creadaEn:
+          type: string
+          format: date-time
+    RecordatorioResponse:
+      type: object
+      properties:
+        codigo:
+          type: string
+        codigoReserva:
+          type: string
+        tipo:
+          $ref: '#/components/schemas/TipoRecordatorio'
+        momentoEvento:
+          type: string
+          format: date-time
+        fechaRecordatorio:
+          type: string
+          format: date-time
+        estado:
+          $ref: '#/components/schemas/EstadoRecordatorio'
+        ultimoError:
+          type: string
+    ReporteIngresosResponse:
+      type: object
+      properties:
+        fechaDesde:
+          type: string
+          format: date
+        fechaHasta:
+          type: string
+          format: date
+        totalIngresos:
+          type: integer
+          format: int64
+        moneda:
+          type: string
+        porMedio:
+          type: array
+          items:
+            $ref: '#/components/schemas/IngresoPorMedioResponse'
+    ReporteOcupacionResponse:
+      type: object
+      properties:
+        fechaDesde:
+          type: string
+          format: date
+        fechaHasta:
+          type: string
+          format: date
+        nochesVendidas:
+          type: integer
+          format: int64
+        apartamentosActivos:
+          type: integer
+        nochesPeriodo:
+          type: integer
+          format: int64
+        porcentajeOcupacion:
+          type: number
+    ReporteReservasPorCanalResponse:
+      type: object
+      properties:
+        fechaDesde:
+          type: string
+          format: date
+        fechaHasta:
+          type: string
+          format: date
+        canales:
+          type: array
+          items:
+            $ref: '#/components/schemas/ReservasPorCanalResponse'
+    ReservaDetalleResponse:
+      type: object
+      properties:
+        codigo:
+          type: string
+          description: '"RES-2026-00001", no el objeto CodigoReserva.'
+        estado:
+          $ref: '#/components/schemas/EstadoReserva'
+        canalOrigen:
+          $ref: '#/components/schemas/CanalOrigen'
+        identificadorExterno:
+          type: string
+          description: solo en reservas de canal externo (RN-19).
+        codigoTitular:
+          type: string
+        identificacionApartamento:
+          type: string
+        fechaEntrada:
+          type: string
+          format: date
+        fechaSalida:
+          type: string
+          format: date
+        noches:
+          type: integer
+        horaEstimadaLlegada:
+          type: string
+          format: time
+          description: null hasta que se registre (RN-09).
+        ocupantes:
+          type: array
+          items:
+            $ref: '#/components/schemas/OcupanteResponse'
+          description: todos, el titular incluido.
+        totalOcupantes:
+          type: integer
+        valorTotal:
+          type: integer
+          format: int64
+          description: pesos, sin decimales (3.4); el valor congelado (RN-22).
+        moneda:
+          type: string
+          description: '"COP".'
+        versionPoliticaCancelacion:
+          type: integer
+          description: la congelada en la reserva (RN-13, RN-22).
+        fechaCreacion:
+          type: string
+          format: date-time
+        momentoRegistro:
+          type: string
+          format: date-time
+          description: null hasta la llegada.
+        momentoSalida:
+          type: string
+          format: date-time
+          description: null hasta la salida.
+        motivoCancelacion:
+          type: string
+          description: solo si la reserva fue cancelada.
+        mascotas:
+          type: integer
+          description: 'L-16: 0, 1 o 2.'
+    ReservaResumenResponse:
+      type: object
+      properties:
+        codigo:
+          type: string
+        estado:
+          $ref: '#/components/schemas/EstadoReserva'
+        identificacionApartamento:
+          type: string
+        fechaEntrada:
+          type: string
+          format: date
+        fechaSalida:
+          type: string
+          format: date
+        codigoTitular:
+          type: string
+        totalOcupantes:
+          type: integer
+        valorTotal:
+          type: integer
+          format: int64
+          description: pesos, sin decimales (3.4).
+    ReservasPorCanalResponse:
+      type: object
+      properties:
+        canal:
+          $ref: '#/components/schemas/CanalOrigen'
+        total:
+          type: integer
+          format: int64
+        canceladas:
+          type: integer
+          format: int64
+        noShow:
+          type: integer
+          format: int64
+    ResultadoConciliacionResponse:
+      type: object
+      properties:
+        tipo:
+          type: string
+        reserva:
+          $ref: '#/components/schemas/ReservaDetalleResponse'
+        conflicto:
+          $ref: '#/components/schemas/ConflictoCanalResponse'
+    ServicioAdicionalResponse:
+      type: object
+      properties:
+        nombre:
+          type: string
+        valor:
+          type: integer
+          format: int64
+          description: pesos.
+        generaCargo:
+          type: boolean
+    TarifaResponse:
+      type: object
+      properties:
+        idTemporada:
+          type: string
+        valorPorOcupante:
+          type: integer
+          format: int64
+          description: pesos, sin decimales.
+    TemporadaResponse:
+      type: object
+      properties:
+        id:
+          type: string
+        nombre:
+          type: string
+        base:
+          type: boolean
+        periodos:
+          type: array
+          items:
+            $ref: '#/components/schemas/PeriodoAnualResponse'
+    TitularResponse:
+      type: object
+      properties:
+        codigo:
+          type: string
+        nombre:
+          type: string
+        fechaNacimiento:
+          type: string
+          format: date
+        telefono:
+          type: string
+        correo:
+          type: string
+    TramoCancelacionResponse:
+      type: object
+      properties:
+        diasAntelacionMinima:
+          type: integer
+        porcentajeRetencion:
+          type: integer
+    LoginRequest:
+      type: object
+      required:
+      - username
+      - password
+      properties:
+        username:
+          type: string
+          minLength: 1
+        password:
+          type: string
+          minLength: 1
+    TokenResponse:
+      type: object
+      properties:
+        token:
+          type: string
+          description: 'JWT. Va como `Authorization: Bearer <token>`. En `/api/auth/me` viene vacío.'
+        username:
+          type: string
+        rol:
+          $ref: '#/components/schemas/RolUsuario'
+        nombre:
+          type: string
+    CanalOrigen:
+      type: string
+      enum:
+      - PORTAL
+      - DIRECTO
+      - EXTERNO
+      description: Canal por el que entra la reserva. EXTERNO exige identificadorExterno (RN-19).
+    EstadoReserva:
+      type: string
+      enum:
+      - PENDIENTE
+      - CONFIRMADA
+      - EN_CURSO
+      - FINALIZADA
+      - CANCELADA
+      - NO_SHOW
+      description: 'Estados de la reserva (RN-08). Activas: PENDIENTE, CONFIRMADA, EN_CURSO; terminales: FINALIZADA, CANCELADA, NO_SHOW.'
+    EstadoOperativo:
+      type: string
+      enum:
+      - PREPARADO
+      - OCUPADO
+      - PENDIENTE_PREPARACION
+      - EN_PREPARACION
+      - FUERA_DE_SERVICIO
+      description: Condición física del apartamento (F-09). Solo PREPARADO puede recibir un grupo (RN-11).
+    TipoCargo:
+      type: string
+      enum:
+      - ALOJAMIENTO
+      - SERVICIO_ADICIONAL
+      - AJUSTE
+      - PENALIDAD
+      description: Tipo de cargo del folio.
+    MedioPago:
+      type: string
+      enum:
+      - EFECTIVO
+      - TARJETA
+      - TRANSFERENCIA
+      description: Medio con el que se registra un pago (RN-15).
+    TipoRecordatorio:
+      type: string
+      enum:
+      - ENTRADA
+      - SALIDA
+      description: Evento que origina el recordatorio (RN-23).
+    EstadoRecordatorio:
+      type: string
+      enum:
+      - PROGRAMADO
+      - ENVIADO
+      - FALLIDO
+      - CANCELADO
+      description: Estado del recordatorio.
+    GravedadNovedad:
+      type: string
+      enum:
+      - BAJA
+      - MEDIA
+      - ALTA
+      description: Gravedad de una novedad del apartamento.
+    SituacionNoche:
+      type: string
+      enum:
+      - DISPONIBLE
+      - OCUPADA
+      - BLOQUEADA
+      description: Situación de una noche en el calendario.
+    RolUsuario:
+      type: string
+      enum:
+      - ADMIN
+      - RECEPCION
+      - SERVICIO
+      - CANAL
+      - HUESPED
+      description: Rol de acceso HTTP.
+    PaginaReservaResumenResponse:
+      type: object
+      description: Página de ReservaResumenResponse. Tamaño fijo de 10 elementos.
+      properties:
+        contenido:
+          type: array
+          items:
+            $ref: '#/components/schemas/ReservaResumenResponse'
+        pagina:
+          type: integer
+          description: Número de página, desde 0
+        tamano:
+          type: integer
+          example: 10
+        totalElementos:
+          type: integer
+          format: int64
+        totalPaginas:
+          type: integer
+    PaginaApartamentoResponse:
+      type: object
+      description: Página de ApartamentoResponse. Tamaño fijo de 10 elementos.
+      properties:
+        contenido:
+          type: array
+          items:
+            $ref: '#/components/schemas/ApartamentoResponse'
+        pagina:
+          type: integer
+          description: Número de página, desde 0
+        tamano:
+          type: integer
+          example: 10
+        totalElementos:
+          type: integer
+          format: int64
+        totalPaginas:
+          type: integer
+    PaginaBloqueoResponse:
+      type: object
+      description: Página de BloqueoResponse. Tamaño fijo de 10 elementos.
+      properties:
+        contenido:
+          type: array
+          items:
+            $ref: '#/components/schemas/BloqueoResponse'
+        pagina:
+          type: integer
+          description: Número de página, desde 0
+        tamano:
+          type: integer
+          example: 10
+        totalElementos:
+          type: integer
+          format: int64
+        totalPaginas:
+          type: integer
+    PaginaApartamentoDisponibleResponse:
+      type: object
+      description: Página de ApartamentoDisponibleResponse. Tamaño fijo de 10 elementos.
+      properties:
+        contenido:
+          type: array
+          items:
+            $ref: '#/components/schemas/ApartamentoDisponibleResponse'
+        pagina:
+          type: integer
+          description: Número de página, desde 0
+        tamano:
+          type: integer
+          example: 10
+        totalElementos:
+          type: integer
+          format: int64
+        totalPaginas:
+          type: integer
+    PaginaCanalExternoResponse:
+      type: object
+      description: Página de CanalExternoResponse. Tamaño fijo de 10 elementos.
+      properties:
+        contenido:
+          type: array
+          items:
+            $ref: '#/components/schemas/CanalExternoResponse'
+        pagina:
+          type: integer
+          description: Número de página, desde 0
+        tamano:
+          type: integer
+          example: 10
+        totalElementos:
+          type: integer
+          format: int64
+        totalPaginas:
+          type: integer
+    PaginaConflictoCanalResponse:
+      type: object
+      description: Página de ConflictoCanalResponse. Tamaño fijo de 10 elementos.
+      properties:
+        contenido:
+          type: array
+          items:
+            $ref: '#/components/schemas/ConflictoCanalResponse'
+        pagina:
+          type: integer
+          description: Número de página, desde 0
+        tamano:
+          type: integer
+          example: 10
+        totalElementos:
+          type: integer
+          format: int64
+        totalPaginas:
+          type: integer
+    PaginaNovedadResponse:
+      type: object
+      description: Página de NovedadResponse. Tamaño fijo de 10 elementos.
+      properties:
+        contenido:
+          type: array
+          items:
+            $ref: '#/components/schemas/NovedadResponse'
+        pagina:
+          type: integer
+          description: Número de página, desde 0
+        tamano:
+          type: integer
+          example: 10
+        totalElementos:
+          type: integer
+          format: int64
+        totalPaginas:
+          type: integer
+    ErrorResponse:
+      type: object
+      description: Cuerpo uniforme de error (ManejadorExcepcionesGlobal).
+      properties:
+        timestamp:
+          type: string
+          format: date-time
+        status:
+          type: integer
+          example: 409
+        error:
+          type: string
+          example: Regla de dominio
+        mensaje:
+          type: string
+          description: Mensaje con significado de negocio, nunca una traza técnica
+        ruta:
+          type: string
+          example: /api/reservas
+        detalles:
+          type: array
+          items:
+            type: string
+          description: 'Un elemento por campo inválido (solo en 400 de validación): `campo: mensaje`'

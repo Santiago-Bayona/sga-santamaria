@@ -3,7 +3,7 @@
 Proyecto desarrollado para el curso de **Programación Avanzada** de la Universidad del Quindío.
 
 ## Descripción del Alojamiento
-[Escribe aquí una breve descripción del alojamiento Santamaria, por ejemplo: número de apartamentos, capacidad, características principales].
+Santamaria es un alojamiento turístico de Montenegro, Quindío, orientado a familias, parejas y grupos que buscan una estancia cómoda y tranquila, con apartamentos independientes, piscina y espacios adecuados para disfrutar del entorno natural del Quindío.
 
 ##  Integrantes del Equipo
 * Laura Sofia Osorio Medina
