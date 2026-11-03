@@ -3,11 +3,11 @@ package co.edu.uniquindio.sga.infrastructure.web.controller;
 import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RestController;
-
+import io.swagger.v3.oas.annotations.Hidden;
 /**
  * GET /api/docs. Texto corto que indica dónde está Swagger. La especificación viva la genera springdoc.
  */
-
+@Hidden
 @RestController
 public class DocumentacionApiController {
 
