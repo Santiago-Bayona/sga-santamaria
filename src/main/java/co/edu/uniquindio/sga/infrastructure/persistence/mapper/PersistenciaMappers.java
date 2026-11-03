@@ -189,7 +189,7 @@ public class PersistenciaMappers {
         ConfiguracionAlojamiento cfg = alojamiento.getConfiguracion();
         entidad.setHoraEntrada(cfg.horaEntrada());
         entidad.setHoraSalida(cfg.horaSalida());
-        entidad.setTiempoPreparacionHoras(cfg.tiempoPreparacion().valor().toHours());
+        entidad.setTiempoPreparacionMinutos(cfg.tiempoPreparacion().valor().toMinutes());
         entidad.setPlazoConfirmacionHoras(cfg.plazoConfirmacion().horas());
         entidad.setHoraLimiteNoShow(cfg.horaLimiteNoShow());
         entidad.setUmbralEdadFacturable(cfg.umbralEdadFacturable().anios());
@@ -227,7 +227,7 @@ public class PersistenciaMappers {
         ConfiguracionAlojamiento configuracion = new ConfiguracionAlojamiento(
                 entidad.getHoraEntrada(),
                 entidad.getHoraSalida(),
-                new TiempoPreparacion(Duration.ofHours(entidad.getTiempoPreparacionHoras())),
+                new TiempoPreparacion(Duration.ofMinutes(entidad.getTiempoPreparacionMinutos())),
                 new PlazoConfirmacion(entidad.getPlazoConfirmacionHoras()),
                 entidad.getHoraLimiteNoShow(),
                 new UmbralEdadFacturable(entidad.getUmbralEdadFacturable()),

@@ -51,8 +51,8 @@ public class AlojamientoJpaEntity {
     @Column(name = "hora_salida", nullable = false)
     private LocalTime horaSalida;
 
-    @Column(name = "tiempo_preparacion_horas", nullable = false)
-    private long tiempoPreparacionHoras;
+    @Column(name = "tiempo_preparacion_minutos", nullable = false)
+    private long tiempoPreparacionMinutos;
 
     @Column(name = "plazo_confirmacion_horas", nullable = false)
     private int plazoConfirmacionHoras;
@@ -165,12 +165,12 @@ public class AlojamientoJpaEntity {
         this.horaSalida = horaSalida;
     }
 
-    public long getTiempoPreparacionHoras() {
-        return tiempoPreparacionHoras;
+    public long getTiempoPreparacionMinutos() {
+        return tiempoPreparacionMinutos;
     }
 
-    public void setTiempoPreparacionHoras(long tiempoPreparacionHoras) {
-        this.tiempoPreparacionHoras = tiempoPreparacionHoras;
+    public void setTiempoPreparacionMinutos(long tiempoPreparacionMinutos) {
+        this.tiempoPreparacionMinutos = tiempoPreparacionMinutos;
     }
 
     public int getPlazoConfirmacionHoras() {

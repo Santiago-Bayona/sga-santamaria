@@ -29,7 +29,7 @@ CREATE TABLE alojamientos (
     longitud                                 DECIMAL(10, 7) NOT NULL,
     hora_entrada                             TIME           NOT NULL,
     hora_salida                              TIME           NOT NULL,
-    tiempo_preparacion_horas                 BIGINT         NOT NULL,
+    tiempo_preparacion_minutos               BIGINT         NOT NULL,
     plazo_confirmacion_horas                 INT            NOT NULL,
     hora_limite_noshow                       TIME           NOT NULL,
     umbral_edad_facturable                   INT            NOT NULL,

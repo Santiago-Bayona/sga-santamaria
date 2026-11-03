@@ -37,15 +37,97 @@ info:
 
 sga:
   ficha:
+    # ---- A.4 Parámetros
     hora-entrada: "15:00"
     hora-salida: "11:00"
-    tiempo-preparacion-horas: 3
-    plazo-confirmacion-horas: 24
-    hora-limite-no-show: "18:00"
-    umbral-edad-facturable: 5
+    tiempo-preparacion-minutos: 150        # 2 h 30 min
+    plazo-confirmacion-horas: 12
+    hora-limite-no-show: "23:59"
+    umbral-edad-facturable: 3
     porcentaje-anticipo: 30
     antelacion-recordatorio-entrada-horas: 24
     antelacion-recordatorio-salida-horas: 4
+
+    # ---- A.1 Identidad
+    identidad:
+      codigo: SANTAMARIA
+      nombre: Santamaría
+      descripcion: >-
+        Alojamiento turístico de Montenegro, Quindío, orientado a familias, parejas y grupos que buscan una
+        estancia cómoda y tranquila, con apartamentos independientes, piscina y espacios para disfrutar del
+        entorno natural del Quindío.
+      ciudad: Montenegro
+      direccion: Vereda El Caimo, Montenegro, Quindío
+      latitud: 4.5650000
+      longitud: -75.7510000
+
+    # ---- A.4 Normas de convivencia
+    normas:
+      - Prohibido fumar dentro de los apartamentos.
+      - Respetar horarios de descanso.
+      - No superar la capacidad máxima del apartamento.
+      - No realizar fiestas o eventos sin autorización.
+      - Mantener las áreas comunes limpias.
+      - Las mascotas deben permanecer bajo supervisión de su responsable.
+      - Se debe respetar el mobiliario y las instalaciones.
+
+    # ---- A.5 Servicios adicionales (el nombre "Mascotas" lo usa el cargo de L-16)
+    servicios:
+      - { nombre: Mascotas, valor: 30000, genera-cargo: true }
+      - { nombre: Desayuno, valor: 16000, genera-cargo: true }
+      - { nombre: Parqueadero, valor: 10000, genera-cargo: true }
+
+    # ---- A.3 Temporadas (periodos "MM-dd/MM-dd"; un periodo puede cruzar el año)
+    temporadas:
+      - { id: BASE, nombre: Temporada base, base: true }
+      - { id: ALTA, nombre: Temporada alta, base: false, periodos: ["06-01/07-31", "12-01/01-11"] }
+      - { id: BAJA, nombre: Temporada baja, base: false, periodos: ["02-01/03-31"] }
+
+    # ---- A.4 Política de cancelación (días de antelación mínima → % de retención del anticipo)
+    politica:
+      codigo: POL-SANTAMARIA
+      tramos:
+        - { dias-antelacion-minima: 7, retencion: 0 }
+        - { dias-antelacion-minima: 0, retencion: 50 }
+      retencion-no-show: 100
+
+    # ---- A.2 Inventario + A.3 Tarifas por ocupante facturable por noche
+    apartamentos:
+      - id: APT-01
+        nombre: Barranquero
+        descripcion: Apartamento individual con 3 dormitorios, 1 cama doble y 2 camas sencillas. Cocina, 2 baños, sala y zona social.
+        dormitorios: 3
+        capacidad: 4
+        dotacion: [Cocina, 2 baños, Sala, Zona social, WiFi]
+        tarifas: { BASE: 80000, ALTA: 90000, BAJA: 70000 }
+      - id: APT-02
+        nombre: Orquídea
+        descripcion: Apartamento individual con 1 dormitorio, 1 cama doble, baño privado, cocina, sala y zona social.
+        dormitorios: 1
+        capacidad: 2
+        dotacion: [Cocina, Baño privado, Sala, Zona social, WiFi]
+        tarifas: { BASE: 60000, ALTA: 70000, BAJA: 50000 }
+      - id: APT-03
+        nombre: Guayacán
+        descripcion: Apartamento individual con 3 dormitorios, 1 cama doble y 2 camas sencillas. Cocina, 2 baños, sala y zona social.
+        dormitorios: 3
+        capacidad: 4
+        dotacion: [Cocina, 2 baños, Sala, Zona social, WiFi]
+        tarifas: { BASE: 80000, ALTA: 90000, BAJA: 70000 }
+      - id: APT-04
+        nombre: Palma
+        descripcion: Apartamento individual con 1 dormitorio, 1 cama doble, baño privado, cocina, sala y zona social.
+        dormitorios: 1
+        capacidad: 2
+        dotacion: [Cocina, Baño privado, Sala, Zona social, WiFi]
+        tarifas: { BASE: 60000, ALTA: 70000, BAJA: 50000 }
+      - id: APT-05
+        nombre: Colibrí
+        descripcion: Apartamento familiar amplio con 5 dormitorios, 2 camas dobles y 4 camas sencillas. Cocina, 3 baños, sala amplia y zona social.
+        dormitorios: 5
+        capacidad: 8
+        dotacion: [Cocina, 3 baños, Sala amplia, Zona social, WiFi]
+        tarifas: { BASE: 90000, ALTA: 100000, BAJA: 85000 }
   archivos:
     directorio: ${SGA_ARCHIVOS:data/galeria}
   recordatorios:
