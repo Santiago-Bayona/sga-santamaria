@@ -29,6 +29,8 @@ pnpm-debug.log*
 .env
 .env.*
 !.env.example
+application-secrets.yml
+application-secrets.properties
 *.pem
 *.key
 
