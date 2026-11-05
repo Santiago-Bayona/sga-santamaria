@@ -13,6 +13,7 @@ import co.edu.uniquindio.sga.application.exception.TitularYaRegistradoException;
 import co.edu.uniquindio.sga.application.exception.EntidadNoEncontradaException;
 import co.edu.uniquindio.sga.domain.exception.ReglaDominioException;
 import co.edu.uniquindio.sga.infrastructure.exception.InfraestructuraException;
+import co.edu.uniquindio.sga.infrastructure.security.UsuarioYaRegistradoException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.ConstraintViolationException;
 import org.slf4j.Logger;
@@ -20,6 +21,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.AccessDeniedException;
+import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.core.AuthenticationException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -76,7 +78,8 @@ public class ManejadorExcepcionesGlobal {
             TitularYaRegistradoException.class,
             ApartamentoYaRegistradoException.class,
             CanalExternoYaRegistradoException.class,
-            NovedadYaRegistradaException.class
+            NovedadYaRegistradaException.class,
+            UsuarioYaRegistradoException.class
     })
     public ResponseEntity<ErrorResponse> conflicto(RuntimeException ex, HttpServletRequest req) {
         return respuesta(HttpStatus.CONFLICT, "Conflicto", ex.getMessage(), req, List.of());
@@ -94,7 +97,9 @@ public class ManejadorExcepcionesGlobal {
 
     @ExceptionHandler(AuthenticationException.class)
     public ResponseEntity<ErrorResponse> noAutenticado(AuthenticationException ex, HttpServletRequest req) {
-        return respuesta(HttpStatus.UNAUTHORIZED, "No autenticado", "Debe iniciar sesión (JWT).", req, List.of());
+        // Mensaje genérico en el login fallido: no revela si el usuario existe (Guía 12, 8.6)
+        String mensaje = ex instanceof BadCredentialsException ? "Credenciales inválidas." : "Debe iniciar sesión (JWT).";
+        return respuesta(HttpStatus.UNAUTHORIZED, "No autenticado", mensaje, req, List.of());
     }
 
     @ExceptionHandler(InfraestructuraException.class)

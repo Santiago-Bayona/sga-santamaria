@@ -37,7 +37,9 @@ public class UsuariosInicialesLoader implements ApplicationRunner {
         guardar("servicio", "servicio123", RolUsuario.SERVICIO, "Personal de servicio", null);
         guardar("canal", "canal123", RolUsuario.CANAL, "Canal externo", null);
         guardar("huesped", "huesped123", RolUsuario.HUESPED, "Huésped demo", "TIT-001");
-        LOG.info("Usuarios semilla: admin, recepcion, servicio, canal, huesped (claves de desarrollo).");
+        // Segundo huésped (7.2): para demostrar que un huésped no ve las reservas de otro
+        guardar("huesped2", "huesped123", RolUsuario.HUESPED, "Carlos Restrepo", "TIT-002");
+        LOG.info("Usuarios semilla: admin, recepcion, servicio, canal, huesped, huesped2 (claves de desarrollo).");
     }
 
     private void guardar(String username, String password, RolUsuario rol, String nombre, String titular) {

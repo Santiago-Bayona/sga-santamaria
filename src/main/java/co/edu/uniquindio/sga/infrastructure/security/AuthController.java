@@ -1,9 +1,10 @@
 package co.edu.uniquindio.sga.infrastructure.security;
 
-import co.edu.uniquindio.sga.application.exception.SolicitudAplicacionException;
+import co.edu.uniquindio.sga.application.dto.request.RegistroHuespedRequest;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.core.Authentication;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -12,10 +13,12 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-/**
- * Login en POST /api/auth/login. Devuelve el token, el usuario, el rol y el nombre.
- */
+import java.net.URI;
 
+/**
+ * Autenticación (Guía 12): inicio de sesión que emite el JWT y registro público de huéspedes (7.2).
+ * Todo /api/auth/** es público en SecurityConfig.
+ */
 @RestController
 @Validated
 @RequestMapping("/api/auth")
@@ -24,23 +27,36 @@ public class AuthController {
     private final UsuarioJpaRepository usuarios;
     private final PasswordHasherPort hasher;
     private final JwtService jwtService;
+    private final RegistroHuespedService registro;
 
-    public AuthController(UsuarioJpaRepository usuarios, PasswordHasherPort hasher, JwtService jwtService) {
+    public AuthController(UsuarioJpaRepository usuarios, PasswordHasherPort hasher, JwtService jwtService,
+                          RegistroHuespedService registro) {
         this.usuarios = usuarios;
         this.hasher = hasher;
         this.jwtService = jwtService;
+        this.registro = registro;
     }
 
+    /** POST /api/auth/login → 200 con token, o 401 con mensaje genérico (no revela si el usuario existe). */
     @PostMapping("/login")
     public TokenResponse login(@Valid @RequestBody LoginRequest request) {
-        UsuarioJpaEntity usuario = usuarios.findById(request.username())
+        UsuarioJpaEntity usuario = usuarios.findById(request.username().trim())
                 .filter(UsuarioJpaEntity::isActivo)
-                .orElseThrow(() -> new SolicitudAplicacionException("Credenciales inválidas."));
+                .orElseThrow(() -> new BadCredentialsException("Credenciales inválidas."));
         if (!hasher.coincide(request.password(), usuario.getPasswordHash())) {
-            throw new SolicitudAplicacionException("Credenciales inválidas.");
+            throw new BadCredentialsException("Credenciales inválidas.");
         }
         return new TokenResponse(jwtService.emitir(usuario.getUsername(), usuario.getRol()),
                 usuario.getUsername(), usuario.getRol().name(), usuario.getNombreCompleto());
+    }
+
+    /** POST /api/auth/registro → 201; 400 si el formato falla; 409 si el correo o el documento ya existen. */
+    @PostMapping("/registro")
+    public ResponseEntity<RegistroResponse> registrar(@Valid @RequestBody RegistroHuespedRequest request) {
+        UsuarioJpaEntity usuario = registro.registrar(request);
+        return ResponseEntity.created(URI.create("/api/auth/me"))
+                .body(new RegistroResponse(usuario.getUsername(), usuario.getRol().name(),
+                        usuario.getNombreCompleto(), usuario.getCodigoTitular()));
     }
 
     @GetMapping("/me")
@@ -58,5 +74,8 @@ public class AuthController {
     }
 
     public record TokenResponse(String token, String username, String rol, String nombre) {
+    }
+
+    public record RegistroResponse(String username, String rol, String nombre, String codigoTitular) {
     }
 }

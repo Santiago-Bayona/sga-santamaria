@@ -75,7 +75,7 @@ public class FolioRestController {
     }
 
     @GetMapping("/{codigoReserva}/propio")
-    @PreAuthorize("hasAnyRole('ADMIN','RECEPCION','HUESPED')")
+    @PreAuthorize("hasAnyRole('ADMIN','RECEPCION') or (hasRole('HUESPED') and @propietario.esTitular(#codigoTitular, authentication))")
     public FolioResponse consultarPropio(@PathVariable String codigoReserva, @RequestParam String codigoTitular) {
         return respuestas.folio(consultarPropio.ejecutar(
                 solicitudes.codigoReserva(codigoReserva), solicitudes.codigoTitular(codigoTitular)));
