@@ -104,6 +104,8 @@ public class ReservaRestController {
     }
 
     @PostMapping
+    @PreAuthorize("hasAnyRole('ADMIN','RECEPCION') or (hasRole('HUESPED') and "
+            + "@propietario.puedeReservarComoHuesped(#request.codigoTitular(), #request.canalOrigen(), authentication))")
     public ResponseEntity<ReservaDetalleResponse> crear(@Valid @RequestBody CrearReservaRequest request) {
         var reserva = crearReserva.ejecutar(
                 solicitudes.codigoTitular(request.codigoTitular()),
@@ -119,6 +121,7 @@ public class ReservaRestController {
     }
 
     @GetMapping("/{codigo}")
+    @PreAuthorize("hasAnyRole('ADMIN','RECEPCION') or (hasRole('HUESPED') and @propietario.esTitularDeReserva(#codigo, authentication))")
     public ReservaDetalleResponse consultar(@PathVariable String codigo) {
         return respuestas.reservaDetalle(consultarReserva.ejecutar(solicitudes.codigoReserva(codigo)));
     }
@@ -138,7 +141,7 @@ public class ReservaRestController {
     }
 
     @GetMapping("/titular/{codigoTitular}")
-    @PreAuthorize("hasAnyRole('ADMIN','RECEPCION','HUESPED')")
+    @PreAuthorize("hasAnyRole('ADMIN','RECEPCION') or (hasRole('HUESPED') and @propietario.esTitular(#codigoTitular, authentication))")
     public PaginaResponse<ReservaResumenResponse> historialTitular(@PathVariable String codigoTitular,
                                                                    @RequestParam(defaultValue = "0") int pagina) {
         var resultado = historial.ejecutar(solicitudes.codigoTitular(codigoTitular), pagina);
@@ -178,6 +181,7 @@ public class ReservaRestController {
     }
 
     @PostMapping("/{codigo}/cancelacion")
+    @PreAuthorize("hasAnyRole('ADMIN','RECEPCION') or (hasRole('HUESPED') and @propietario.esTitularDeReserva(#codigo, authentication))")
     public LiquidacionPoliticaResponse cancelar(@PathVariable String codigo,
                                                 @Valid @RequestBody CancelarReservaRequest request) {
         return respuestas.liquidacion(cancelar.ejecutar(
