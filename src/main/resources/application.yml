@@ -144,3 +144,11 @@ sga:
     jwt-secret: ${SGA_JWT_SECRET:${sga.secreto.jwt}}
     jwt-expiracion-minutos: ${SGA_JWT_EXP_MIN:30}
     cors-origins: ${SGA_CORS_ORIGINS:http://localhost:8080,http://localhost:5173}
+  # ---- Modelo de IA (10.2): no bloqueante. Apagarla o cambiar de proveedor es solo configuración.
+  ia:
+    habilitada: ${SGA_IA_HABILITADA:false}            # false = el resumen sale sin IA y el sistema opera igual
+    proveedor: ${SGA_IA_PROVEEDOR:simulado}           # simulado (local, sin red) | openai-compatible
+    url-base: ${SGA_IA_URL_BASE:}                     # solo openai-compatible, ej. https://api.groq.com/openai/v1
+    modelo: ${SGA_IA_MODELO:}                         # solo openai-compatible: nombre del modelo en el proveedor
+    tiempo-espera-ms: ${SGA_IA_TIEMPO_ESPERA_MS:5000} # tiempo máximo de espera de la respuesta (I-03)
+    clave: ${SGA_IA_CLAVE:${sga.secreto.ia-clave:}}   # I-06: nunca versionada; va en application-secrets.yml
