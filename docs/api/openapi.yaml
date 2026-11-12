@@ -27,6 +27,8 @@ servers:
 tags:
 - name: Autenticación
   description: Login y consulta del usuario del token (JWT).
+- name: Operación
+  description: Apoyo a la operación diaria de recepción, como el resumen de llegadas y salidas (con IA opcional y no bloqueante).
 - name: Reservas
   description: 'Ciclo de vida del agregado Reserva: crear, consultar, confirmar, modificar, cancelar, llegada, salida, no-show, vencimiento.'
 - name: Folios
@@ -407,6 +409,41 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/PaginaReservaResumenResponse'
+        '400':
+          $ref: '#/components/responses/DatosInvalidos'
+        '401':
+          $ref: '#/components/responses/NoAutenticado'
+        '403':
+          $ref: '#/components/responses/Prohibido'
+        '500':
+          $ref: '#/components/responses/ErrorInterno'
+  /api/operacion/resumen-diario:
+    get:
+      tags:
+      - Operación
+      summary: Resumen diario de llegadas y salidas previstas
+      operationId: generarResumenDiario
+      description: |-
+        Caso de uso: `GenerarResumenDiarioUseCase`.
+
+        Roles permitidos: `ADMIN`, `RECEPCION`.
+
+        Devuelve las llegadas (reservas CONFIRMADAS que entran ese día) y las salidas (reservas EN_CURSO que salen ese día), con un texto de resumen. El texto lo redacta un modelo de IA si está habilitado; si la IA está apagada, tarda o falla, la respuesta es igual de exitosa (**200**) con el resumen básico, `generadoPorIa: false` y el motivo en `motivoDegradacion`. La IA nunca impide operar. Al modelo solo se le envían códigos de reserva, apartamentos, horas y número de personas.
+      parameters:
+      - name: fecha
+        in: query
+        required: false
+        description: Día del resumen. Si no se envía, es hoy.
+        schema:
+          type: string
+          format: date
+      responses:
+        '200':
+          description: Resumen del día, con o sin IA
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResumenDiarioResponse'
         '400':
           $ref: '#/components/responses/DatosInvalidos'
         '401':
@@ -4288,6 +4325,57 @@ components:
         mascotas:
           type: integer
           description: 'L-16: 0, 1 o 2.'
+    MotivoDegradacionIa:
+      type: string
+      enum:
+      - IA_DESHABILITADA
+      - IA_SIMULADA
+      - TIEMPO_AGOTADO
+      - ERROR_PROVEEDOR
+      description: Por qué el resumen no lo redactó un modelo de IA. IA_DESHABILITADA, apagada por configuración; IA_SIMULADA, implementación local sin modelo; TIEMPO_AGOTADO, el modelo no respondió a tiempo; ERROR_PROVEEDOR, el proveedor falló o su respuesta no sirvió.
+    MovimientoDiarioResponse:
+      type: object
+      properties:
+        codigoReserva:
+          type: string
+        identificacionApartamento:
+          type: string
+        horaEstimada:
+          type:
+          - string
+          - 'null'
+          format: time
+          description: Hora estimada de llegada. Nula en las salidas.
+        totalOcupantes:
+          type: integer
+    ResumenDiarioResponse:
+      type: object
+      properties:
+        fecha:
+          type: string
+          format: date
+        totalLlegadas:
+          type: integer
+        totalSalidas:
+          type: integer
+        llegadas:
+          type: array
+          items:
+            $ref: '#/components/schemas/MovimientoDiarioResponse'
+        salidas:
+          type: array
+          items:
+            $ref: '#/components/schemas/MovimientoDiarioResponse'
+        texto:
+          type: string
+          description: Resumen redactado por la IA o, si no estuvo disponible, el resumen básico del sistema.
+        generadoPorIa:
+          type: boolean
+        motivoDegradacion:
+          description: Nulo cuando lo redactó la IA.
+          oneOf:
+          - $ref: '#/components/schemas/MotivoDegradacionIa'
+          - type: 'null'
     ReservaResumenResponse:
       type: object
       properties:
