@@ -44,9 +44,9 @@ sga:
     # ---- A.4 Parámetros
     hora-entrada: "15:00"
     hora-salida: "11:00"
-    tiempo-preparacion-minutos: 150        # 2 h 30 min
+    tiempo-preparacion-minutos: 150
     plazo-confirmacion-horas: 12
-    hora-limite-no-show: "23:59"
+    hora-limite-no-show: "23:00"
     umbral-edad-facturable: 3
     porcentaje-anticipo: 30
     antelacion-recordatorio-entrada-horas: 24
