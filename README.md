@@ -26,13 +26,13 @@ Santamaria es un alojamiento turístico de Montenegro, Quindío, orientado a fam
 
 El mismo código corre en local y en la nube. Lo que cambia son variables de entorno: no hay URLs ni secretos en el repositorio.
 
-| Pieza | Dónde | URL prevista |
+| Pieza | Dónde | URL |
 | --- | --- | --- |
 | Aplicación | Vercel, carpeta `frontend` | https://sga-front-santamaria.vercel.app |
 | API | Render, Docker, rama `main` | https://sga-api-santamaria.onrender.com |
 | Salud | Render | https://sga-api-santamaria.onrender.com/actuator/health |
 
-Esas URLs usan el nombre sugerido del servicio. Si al crearlos en la plataforma queda otro nombre, hay que actualizar esta tabla y la variable `VITE_API_URL`.
+La aplicación y el API ya están publicados en esas direcciones. El front llama al API con `VITE_API_URL`.
 
 El plan gratuito de Render duerme el servicio tras unos 15 minutos sin uso: la primera petición después puede tardar cerca de un minuto, y la base H2 en archivo vuelve al estado inicial (se pierden las reservas creadas). Por eso en Render hay que dejar `SGA_USUARIOS_INICIALES_HABILITADOS=true`, para que al despertar exista de nuevo la cuenta de administración. La contraseña de esa cuenta solo vive en las variables de Render.
 
