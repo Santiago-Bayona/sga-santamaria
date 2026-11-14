@@ -2,13 +2,11 @@ package co.edu.uniquindio.sga.infrastructure.notification;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.stereotype.Component;
 
 /**
- * Adaptador de correo para desarrollo: registra el mensaje en el log.
- * Se puede reemplazar por un cliente SMTP sin tocar dominio ni aplicación.
+ * Adaptador de correo para desarrollo: registra el mensaje en el log (sga.correo.proveedor=log).
+ * Lo crea {@link CorreoConfig}; se reemplaza por {@link BrevoCorreoAdapter} sin tocar dominio ni aplicación.
  */
-@Component
 public class LoggingCorreoAdapter implements CorreoNotificacionPort {
 
     private static final Logger LOG = LoggerFactory.getLogger(LoggingCorreoAdapter.class);

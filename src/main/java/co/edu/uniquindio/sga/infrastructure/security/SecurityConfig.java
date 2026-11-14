@@ -49,6 +49,7 @@ public class SecurityConfig {
                         .requestMatchers("/api/auth/**").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/disponibilidad", "/api/alojamiento", "/api/apartamentos").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/cotizaciones").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/archivos/imagenes/**").permitAll()
                         .requestMatchers("/h2-console/**", "/actuator/health", "/actuator/info", "/api/docs",
                                 "/swagger-ui.html", "/swagger-ui/**", "/v3/api-docs", "/v3/api-docs/**", "/v3/api-docs.yaml").permitAll()
                         .anyRequest().authenticated())

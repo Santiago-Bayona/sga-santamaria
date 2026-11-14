@@ -1,0 +1,48 @@
+/* Resumen del día: tarjeta destacada, en durazno cuando lo redacta la IA */
+.resumen-ia {
+  border-radius: var(--radio); padding: 22px 24px; border: 1px solid var(--borde);
+  background: #fff; box-shadow: var(--sombra); display: flex; flex-direction: column; gap: 14px;
+}
+.resumen-ia--ia { background: linear-gradient(135deg, var(--durazno-suave) 0%, #fff 70%); border-color: #F2D3BA; }
+.resumen-ia__cabecera { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.resumen-ia__icono { width: 40px; height: 40px; border-radius: 12px; display: grid; place-items: center; background: var(--verde-suave); color: var(--verde); }
+.resumen-ia--ia .resumen-ia__icono { background: var(--durazno); color: #7A3E14; }
+.resumen-ia__titulo { font-size: 17px; font-weight: 600; }
+.resumen-ia__origen { font-size: 13px; color: var(--texto-2); }
+.resumen-ia__texto { font-size: 16px; line-height: 1.7; white-space: pre-line; max-width: 75ch; }
+.resumen-ia__nota { font-size: 13px; color: var(--texto-2); }
+
+.enlace-tabla { text-decoration: none; border: 0; background: none; padding: 0; color: var(--verde); font-weight: 600; cursor: pointer; font-variant-numeric: tabular-nums; }
+.enlace-tabla:hover { text-decoration: underline; }
+
+/* Filtros del listado */
+.filtros { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; padding: 18px 22px; border-bottom: 1px solid var(--borde); background: #FBFCFB; }
+.filtros .control { min-height: 42px; }
+.filtros__acciones { display: flex; gap: 8px; align-items: flex-end; }
+@media (max-width: 900px) { .filtros { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 600px) { .filtros { grid-template-columns: 1fr; } }
+
+/* Detalle de reserva */
+.acciones-reserva { display: flex; gap: 10px; flex-wrap: wrap; }
+.linea-tiempo { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 14px; }
+.linea-tiempo li { display: flex; gap: 12px; align-items: flex-start; }
+.linea-tiempo__punto { width: 12px; height: 12px; border-radius: 50%; background: var(--verde); margin-top: 6px; flex: none; box-shadow: 0 0 0 4px var(--verde-suave); }
+.linea-tiempo__punto--apagado { background: var(--borde); box-shadow: 0 0 0 4px var(--gris-suave); }
+.linea-tiempo__texto { font-size: 14px; }
+.linea-tiempo__fecha { font-size: 13px; color: var(--texto-2); }
+
+/* Ocupantes en el formulario de reserva */
+.ocupante { display: grid; grid-template-columns: minmax(0, 1fr) 190px auto; gap: 12px; align-items: end; }
+@media (max-width: 600px) { .ocupante { grid-template-columns: 1fr; } }
+
+/* Folio */
+.saldo { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); border-top: 1px solid var(--borde); }
+.saldo > div { padding: 18px 22px; }
+.saldo > div + div { border-left: 1px solid var(--borde); }
+.saldo__valor { font-size: 22px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.saldo__valor--deuda { color: var(--rojo); }
+.saldo__valor--favor { color: var(--verde); }
+@media (max-width: 600px) { .saldo { grid-template-columns: 1fr; } .saldo > div + div { border-left: 0; border-top: 1px solid var(--borde); } }
+
+.rejilla--detalle { grid-template-columns: minmax(0, 2fr) minmax(260px, 1fr); align-items: start; }
+@media (max-width: 900px) { .rejilla--detalle { grid-template-columns: 1fr; } }

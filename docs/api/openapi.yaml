@@ -115,6 +115,70 @@ paths:
         '500':
           $ref: '#/components/responses/ErrorInterno'
       security: []
+  /api/auth/recuperar-contrasena:
+    post:
+      tags:
+      - Autenticación
+      summary: Pedir un enlace para restablecer la contraseña
+      operationId: recuperarContrasena
+      description: |-
+        Caso de uso: `RecuperacionContrasenaService`.
+
+        Público (no requiere token).
+
+        Responde **202** siempre, exista o no el correo, para no revelar quién tiene cuenta. Si el correo es de un
+        usuario activo, le llega (por Brevo) un enlace `{frontend}/restablecer?token=...` que vence a los 30 minutos
+        y sirve una sola vez. Se guarda solo el SHA-256 del token. Máximo un enlace por usuario por minuto.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RecuperarContrasenaRequest'
+            example:
+              correo: huesped@correo.com
+      responses:
+        '202':
+          description: Solicitud recibida
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MensajeResponse'
+        '400':
+          $ref: '#/components/responses/DatosInvalidos'
+        '500':
+          $ref: '#/components/responses/ErrorInterno'
+      security: []
+  /api/auth/restablecer-contrasena:
+    post:
+      tags:
+      - Autenticación
+      summary: Cambiar la contraseña con el token del correo
+      operationId: restablecerContrasena
+      description: |-
+        Caso de uso: `RecuperacionContrasenaService`.
+
+        Público (no requiere token).
+
+        **400** si la contraseña no cumple el formato o si el enlace no existe, ya se usó o venció
+        ("El enlace no es válido o ya venció. Solicita uno nuevo.").
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RestablecerContrasenaRequest'
+            example:
+              token: Xq3...token-del-enlace
+              contrasena: NuevaClave2026
+      responses:
+        '204':
+          description: Contraseña cambiada; el enlace queda usado
+        '400':
+          $ref: '#/components/responses/DatosInvalidos'
+        '500':
+          $ref: '#/components/responses/ErrorInterno'
+      security: []
   /api/reservas:
     post:
       tags:
@@ -1510,6 +1574,96 @@ paths:
                 $ref: '#/components/schemas/ErrorResponse'
         '500':
           $ref: '#/components/responses/ErrorInterno'
+  /api/apartamentos/{identificacion}/imagenes:
+    post:
+      tags:
+      - Apartamentos
+      summary: Subir una imagen a la galería del apartamento
+      operationId: subirImagenApartamento
+      description: |-
+        Caso de uso: `SubirImagenApartamentoUseCase`.
+
+        Requiere rol: **ADMIN**.
+
+        Guarda la imagen en el servicio de imágenes (Cloudinary si `sga.imagenes.proveedor=cloudinary`, con el
+        disco local de respaldo si falla; I-02) y agrega su URL al final de la galería sin cambiar la principal.
+        Acepta JPG, PNG o WebP de hasta 5 MB; se revisa el contenido real del archivo. **409** si la galería ya
+        tiene 10 imágenes. Quitar imágenes o cambiar la principal se hace con `PUT /api/apartamentos/{identificacion}`.
+      parameters:
+      - name: identificacion
+        in: path
+        required: true
+        schema:
+          type: string
+        example: APT-01
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required:
+              - imagen
+              properties:
+                imagen:
+                  type: string
+                  format: binary
+      responses:
+        '200':
+          description: Apartamento con la galería actualizada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApartamentoResponse'
+        '400':
+          $ref: '#/components/responses/DatosInvalidos'
+        '401':
+          $ref: '#/components/responses/NoAutenticado'
+        '403':
+          $ref: '#/components/responses/Prohibido'
+        '404':
+          $ref: '#/components/responses/NoEncontrado'
+        '409':
+          $ref: '#/components/responses/ReglaDeNegocio'
+        '500':
+          $ref: '#/components/responses/ErrorInterno'
+  /api/archivos/imagenes/{nombre}:
+    get:
+      tags:
+      - Apartamentos
+      summary: Descargar una imagen guardada en el respaldo local
+      operationId: descargarImagenLocal
+      description: |-
+        Público (no requiere token).
+
+        Sirve las imágenes que se guardaron en el disco del backend (proveedor `local` o respaldo de Cloudinary).
+        Solo acepta nombres generados por el sistema (`[a-z0-9-]+.(jpg|png|webp)`); cualquier otro responde 404.
+      parameters:
+      - name: nombre
+        in: path
+        required: true
+        schema:
+          type: string
+        example: apt-01-3f2c9a1e-8b7d-4c51-9e0a-2d6f4b8c7a10.jpg
+      responses:
+        '200':
+          description: La imagen
+          content:
+            image/jpeg:
+              schema:
+                type: string
+                format: binary
+            image/png:
+              schema:
+                type: string
+                format: binary
+            image/webp:
+              schema:
+                type: string
+                format: binary
+        '404':
+          $ref: '#/components/responses/NoEncontrado'
+      security: []
   /api/apartamentos/{identificacion}/activacion:
     post:
       tags:
@@ -4499,6 +4653,38 @@ components:
         rol:
           $ref: '#/components/schemas/RolUsuario'
         nombre:
+          type: string
+        codigoTitular:
+          type: string
+          nullable: true
+          description: Titular asociado al usuario. Solo viene para el rol HUESPED.
+    RecuperarContrasenaRequest:
+      type: object
+      required:
+      - correo
+      properties:
+        correo:
+          type: string
+          format: email
+          maxLength: 80
+    RestablecerContrasenaRequest:
+      type: object
+      required:
+      - token
+      - contrasena
+      properties:
+        token:
+          type: string
+          maxLength: 100
+          description: Valor del parámetro `token` del enlace del correo.
+        contrasena:
+          type: string
+          pattern: '^(?=.*[A-Z])(?=.*\d).{8,}$'
+          description: Mínimo 8 caracteres, al menos una mayúscula y un número.
+    MensajeResponse:
+      type: object
+      properties:
+        mensaje:
           type: string
     CanalOrigen:
       type: string

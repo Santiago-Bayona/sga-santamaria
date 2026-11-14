@@ -63,6 +63,7 @@ public class NovedadRestController {
     }
 
     @GetMapping
+    @PreAuthorize("hasAnyRole('ADMIN','SERVICIO')")
     public PaginaResponse<NovedadResponse> consultar(@RequestParam @NotBlank String identificacion,
                                                      @RequestParam(defaultValue = "0") int pagina) {
         var resultado = consultar.ejecutar(solicitudes.identificacion(identificacion), pagina);

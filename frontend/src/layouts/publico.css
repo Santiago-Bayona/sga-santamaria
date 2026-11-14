@@ -1,0 +1,51 @@
+.publico { min-height: 100vh; display: flex; flex-direction: column; background: var(--fondo); }
+.cabecera-publica { position: sticky; top: 0; z-index: 50; background: rgba(255,255,255,.92); backdrop-filter: blur(8px); border-bottom: 1px solid var(--borde); }
+.cabecera-publica__interior { max-width: 1240px; margin: 0 auto; padding: 12px 32px; display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+.cabecera-publica a.marca-enlace { text-decoration: none; color: var(--texto); }
+.cabecera-publica .marca__sub { color: var(--texto-2); }
+.pie-publico { margin-top: auto; background: var(--verde-profundo); color: #CFE3D6; font-size: 14px; }
+.pie-publico__interior { max-width: 1240px; margin: 0 auto; padding: 28px 32px; display: flex; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+.pie-publico .marca__sub { color: #A9C9B4; }
+.pie-publico__franja { height: 4px; background: linear-gradient(90deg, var(--verde) 0 50%, var(--durazno) 50% 75%, #EE9F7A 75%); }
+
+.portada { position: relative; overflow: hidden; background: #F6D7B8; }
+.portada__ilustracion { position: absolute; inset: 0 0 0 auto; width: min(52%, 640px); }
+.portada__ilustracion img { width: 100%; height: 100%; object-fit: cover; object-position: center bottom; display: block; }
+.portada__ilustracion::before { content: ''; position: absolute; inset: 0 auto 0 0; width: 120px; background: linear-gradient(90deg, #F6D7B8, rgba(246,215,184,0)); z-index: 1; }
+.portada__interior { position: relative; z-index: 2; max-width: 1240px; margin: 0 auto; padding: 64px 32px 72px; }
+.portada__texto { max-width: 560px; display: flex; flex-direction: column; gap: 14px; color: #2A1E17; }
+.portada__titulo { font-size: clamp(34px, 4.4vw, 52px); font-weight: 700; letter-spacing: -0.02em; line-height: 1.08; }
+.portada__bajada { color: #4A3428; font-size: 17px; line-height: 1.6; }
+.buscador { margin-top: 28px; max-width: 760px; background: #fff; border-radius: 20px; box-shadow: var(--sombra-alta); padding: 22px; display: grid; grid-template-columns: 1fr 1fr 1.2fr auto; gap: 14px; align-items: end; }
+.buscador__grupo { position: relative; }
+.buscador__resumen { width: 100%; justify-content: space-between; }
+.buscador__desplegable { position: absolute; top: calc(100% + 8px); left: 0; width: 320px; z-index: 20; background: #fff; border: 1px solid var(--borde); border-radius: 16px; box-shadow: var(--sombra-alta); padding: 18px; }
+
+.seccion { max-width: 1240px; margin: 0 auto; padding: 48px 32px; width: 100%; }
+.seccion__titulo { font-size: 26px; font-weight: 700; margin-bottom: 6px; }
+.seccion__bajada { color: var(--texto-2); margin-bottom: 22px; }
+.rasgos { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
+.rasgo { display: flex; gap: 14px; align-items: flex-start; padding: 20px; }
+.rasgo__icono { width: 44px; height: 44px; border-radius: 12px; display: grid; place-items: center; background: var(--verde-suave); color: var(--verde); flex: none; }
+
+.desglose { width: 100%; border-collapse: collapse; font-size: 14px; }
+.desglose td, .desglose th { padding: 10px 0; border-bottom: 1px solid var(--borde); text-align: left; }
+.desglose th { font-size: 12px; text-transform: uppercase; letter-spacing: .04em; color: var(--texto-2); font-weight: 600; }
+.desglose .num { text-align: right; font-variant-numeric: tabular-nums; }
+.desglose tfoot td { border-bottom: 0; font-weight: 700; font-size: 16px; padding-top: 14px; }
+
+@media (max-width: 900px) {
+  .portada__ilustracion { opacity: .25; width: 100%; }
+  .buscador { grid-template-columns: 1fr 1fr; }
+  .rasgos { grid-template-columns: 1fr; }
+  .cabecera-publica__interior, .portada__interior, .seccion, .pie-publico__interior { padding-left: 16px; padding-right: 16px; }
+}
+@media (max-width: 560px) { .buscador { grid-template-columns: 1fr; } .buscador__desplegable { width: 100%; } }
+.rejilla--lateral { grid-template-columns: minmax(240px, 300px) minmax(0, 1fr); align-items: start; }
+@media (max-width: 900px) { .rejilla--lateral { grid-template-columns: 1fr; } }
+.rejilla--detalle-publico { grid-template-columns: minmax(0, 1.6fr) minmax(320px, 1fr); align-items: start; gap: 28px; }
+.pegajosa { position: sticky; top: 88px; }
+@media (max-width: 900px) { .rejilla--detalle-publico { grid-template-columns: 1fr; } .pegajosa { position: static; } }
+
+/* Las columnas del detalle no crecen por su contenido (miniaturas, tablas): lo que sobra se desplaza adentro */
+.rejilla--detalle-publico > * { min-width: 0; }
