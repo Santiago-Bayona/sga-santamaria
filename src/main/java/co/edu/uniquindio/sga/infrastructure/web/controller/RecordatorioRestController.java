@@ -51,6 +51,7 @@ public class RecordatorioRestController {
     }
 
     @GetMapping
+    @PreAuthorize("hasAnyRole('ADMIN','RECEPCION')")
     public List<RecordatorioResponse> listar(@PathVariable String codigoReserva) {
         return consultar.ejecutar(solicitudes.codigoReserva(codigoReserva)).stream().map(respuestas::recordatorio).toList();
     }

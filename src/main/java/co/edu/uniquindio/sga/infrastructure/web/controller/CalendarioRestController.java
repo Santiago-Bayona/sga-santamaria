@@ -5,6 +5,7 @@ import co.edu.uniquindio.sga.application.usecase.ConsultarCalendarioOcupacionUse
 import co.edu.uniquindio.sga.infrastructure.web.mapper.SolicitudApiMapper;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -31,6 +32,7 @@ public class CalendarioRestController {
     }
 
     @GetMapping
+    @PreAuthorize("hasAnyRole('ADMIN','RECEPCION')")
     public CalendarioOcupacionResponse consultar(@RequestParam @NotBlank String identificacion,
                                                  @RequestParam @NotNull LocalDate fechaDesde,
                                                  @RequestParam @NotNull LocalDate fechaHasta) {

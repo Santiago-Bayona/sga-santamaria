@@ -14,6 +14,7 @@ import co.edu.uniquindio.sga.application.exception.EntidadNoEncontradaException;
 import co.edu.uniquindio.sga.domain.exception.ReglaDominioException;
 import co.edu.uniquindio.sga.infrastructure.exception.InfraestructuraException;
 import co.edu.uniquindio.sga.infrastructure.security.UsuarioYaRegistradoException;
+import co.edu.uniquindio.sga.infrastructure.security.TokenRecuperacionInvalidoException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.ConstraintViolationException;
 import org.slf4j.Logger;
@@ -26,6 +27,7 @@ import org.springframework.security.core.AuthenticationException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.multipart.MaxUploadSizeExceededException;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -48,6 +50,11 @@ public class ManejadorExcepcionesGlobal {
                 req, detalles);
     }
 
+    @ExceptionHandler(MaxUploadSizeExceededException.class)
+    public ResponseEntity<ErrorResponse> archivoMuyGrande(MaxUploadSizeExceededException ex, HttpServletRequest req) {
+        return respuesta(HttpStatus.BAD_REQUEST, "Archivo muy grande", "La imagen supera los 5 MB.", req, List.of());
+    }
+
     @ExceptionHandler(ConstraintViolationException.class)
     public ResponseEntity<ErrorResponse> validacionParametros(ConstraintViolationException ex, HttpServletRequest req) {
         List<String> detalles = ex.getConstraintViolations().stream()
@@ -60,6 +67,11 @@ public class ManejadorExcepcionesGlobal {
     @ExceptionHandler(SolicitudAplicacionException.class)
     public ResponseEntity<ErrorResponse> solicitud(SolicitudAplicacionException ex, HttpServletRequest req) {
         return respuesta(HttpStatus.BAD_REQUEST, "Solicitud de aplicación", ex.getMessage(), req, List.of());
+    }
+
+    @ExceptionHandler(TokenRecuperacionInvalidoException.class)
+    public ResponseEntity<ErrorResponse> tokenRecuperacion(TokenRecuperacionInvalidoException ex, HttpServletRequest req) {
+        return respuesta(HttpStatus.BAD_REQUEST, "Enlace inválido", ex.getMessage(), req, List.of());
     }
 
     @ExceptionHandler({

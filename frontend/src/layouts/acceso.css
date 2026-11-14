@@ -1,0 +1,63 @@
+/* Pantallas de acceso (login y registro) — propuesta E1: mirador ilustrado + formulario en blanco */
+.acceso { min-height: 100vh; display: flex; flex-wrap: wrap; background: #fff; }
+
+.acceso__escena { flex: 1 1 520px; min-height: 100vh; position: relative; z-index: 1; background: #F6D7B8; }
+.acceso__ilustracion { position: absolute; inset: 0; overflow: hidden; }
+/* La escena se baja para que el techo del mirador quede debajo del lema; arriba se ve el mismo tono del cielo */
+.acceso__ilustracion img { width: 100%; height: 100%; object-fit: cover; object-position: center bottom; display: block; transform: translateY(var(--bajar-escena, 90px)); }
+.acceso__ilustracion::after { content: ''; position: absolute; inset: 0 0 auto 0; height: 300px; pointer-events: none;
+  background: linear-gradient(180deg, #F6D7B8 0, #F6D7B8 90px, rgba(246, 215, 184, 0.85) 170px, rgba(246, 215, 184, 0) 300px); }
+.acceso__textos { position: relative; padding: 36px 48px; display: flex; flex-direction: column; gap: 22px; color: #2A1E17; }
+.acceso__textos .marca__sub { color: #4A3428; }
+.acceso__lema { max-width: 440px; display: flex; flex-direction: column; gap: 12px; }
+.acceso__linea { width: 56px; height: 3px; border-radius: 3px; background: var(--verde); }
+.acceso__titulo { font-size: clamp(28px, 2.8vw, 36px); font-weight: 700; letter-spacing: -0.02em; }
+.acceso__bajada { color: #4A3428; font-size: 15px; line-height: 1.6; }
+
+.acceso__insignia {
+  position: absolute; top: 50%; right: -52px; margin-top: -52px; width: 104px; height: 104px; z-index: 2;
+  border-radius: 50%; background: #fff; display: grid; place-items: center;
+}
+.acceso__insignia-pulso { position: absolute; inset: 12px; border-radius: 50%; background: rgba(30, 132, 73, .22); animation: latir 3.2s ease-in-out infinite; }
+.acceso__insignia-circulo { position: relative; width: 80px; height: 80px; border-radius: 50%; background: var(--verde); display: grid; place-items: center; color: #fff; }
+.acceso__insignia-circulo svg { animation: empujar 1.8s ease-in-out infinite; }
+@keyframes latir { 0%, 100% { transform: scale(1); opacity: .9; } 50% { transform: scale(1.25); opacity: .5; } }
+@keyframes empujar { 0%, 100% { transform: translateX(0); } 50% { transform: translateX(5px); } }
+
+.acceso__panel { flex: 1 1 460px; min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 56px 40px 56px 96px; }
+.acceso__formulario { width: 100%; max-width: 400px; display: flex; flex-direction: column; gap: 20px; }
+.acceso__formulario--ancho { max-width: 520px; }
+.acceso__encabezado h1 { font-size: 36px; font-weight: 700; letter-spacing: -0.02em; color: var(--verde); }
+.acceso__encabezado p { color: var(--texto-2); margin-top: 6px; }
+.acceso__separador { height: 1px; background: var(--borde); }
+.acceso__pie { text-align: center; font-size: 14px; color: var(--texto-2); }
+
+.entra { opacity: 0; animation: entrar-acceso .7s cubic-bezier(.2,.7,.2,1) forwards; }
+.entra-1 { animation-delay: .08s; } .entra-2 { animation-delay: .18s; } .entra-3 { animation-delay: .28s; }
+.entra-4 { animation-delay: .38s; } .entra-5 { animation-delay: .48s; } .entra-6 { animation-delay: .58s; }
+@keyframes entrar-acceso { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: none; } }
+
+.campo-clave { position: relative; }
+.campo-clave__ojo { position: absolute; right: 4px; top: 50%; transform: translateY(-50%); width: 40px; height: 40px;
+  border: 0; background: transparent; border-radius: 50%; display: grid; place-items: center; color: var(--texto-2); cursor: pointer; }
+.campo-clave__ojo:hover { background: var(--gris-suave); }
+
+.casilla { display: flex; align-items: center; gap: 10px; font-size: 14px; color: var(--texto-2); cursor: pointer; }
+.casilla input { width: 18px; height: 18px; accent-color: var(--verde); margin: 0; }
+
+@media (max-width: 980px) {
+  .acceso__escena { min-height: 300px; flex-basis: 100%; --bajar-escena: 0px; }
+  .acceso__ilustracion::after { height: 110px; background: linear-gradient(180deg, #F6D7B8 0, rgba(246, 215, 184, 0) 110px); }
+  .acceso__textos { padding: 28px 24px; }
+  .acceso__lema { display: none; }
+  .acceso__insignia { display: none; }
+  .acceso__panel { min-height: auto; padding: 36px 20px 48px; }
+}
+@media (prefers-reduced-motion: reduce) { .entra { opacity: 1; animation: none; } }
+
+/* Recuperación de contraseña */
+.acceso__olvido { display: block; margin-top: 10px; text-align: right; font-size: 13.5px; font-weight: 600; color: var(--verde); text-decoration: none; }
+.acceso__olvido:hover { text-decoration: underline; }
+.acceso__icono-exito { width: 56px; height: 56px; border-radius: 16px; display: grid; place-items: center; background: var(--verde-suave); color: var(--verde); margin-bottom: 14px; }
+.enlace-boton { border: 0; background: none; padding: 0; color: var(--verde); font: inherit; font-weight: 600; cursor: pointer; }
+.enlace-boton:hover { text-decoration: underline; }

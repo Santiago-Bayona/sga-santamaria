@@ -69,6 +69,7 @@ public class BloqueoRestController {
     }
 
     @GetMapping
+    @PreAuthorize("hasAnyRole('ADMIN','RECEPCION')")
     public PaginaResponse<BloqueoResponse> consultar(@RequestParam @NotBlank String identificacion,
                                                      @RequestParam(defaultValue = "0") int pagina) {
         var resultado = consultar.ejecutar(solicitudes.identificacion(identificacion), pagina);

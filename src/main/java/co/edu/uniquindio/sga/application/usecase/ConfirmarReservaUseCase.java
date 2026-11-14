@@ -12,14 +12,18 @@ import java.time.LocalDateTime;
 public class ConfirmarReservaUseCase {
 
     private final ConfirmacionReservaService confirmacionReservaService;
+    private final AvisadorReserva avisador;
 
-    public ConfirmarReservaUseCase(ConfirmacionReservaService confirmacionReservaService) {
+    public ConfirmarReservaUseCase(ConfirmacionReservaService confirmacionReservaService, AvisadorReserva avisador) {
         this.confirmacionReservaService = confirmacionReservaService;
+        this.avisador = avisador;
     }
 
     @Transactional
     public Reserva ejecutar(CodigoReserva codigoReserva, LocalDateTime momentoActual) {
 
-        return confirmacionReservaService.confirmar(codigoReserva, momentoActual);
+        Reserva reserva = confirmacionReservaService.confirmar(codigoReserva, momentoActual);
+        avisador.confirmada(reserva);
+        return reserva;
     }
 }

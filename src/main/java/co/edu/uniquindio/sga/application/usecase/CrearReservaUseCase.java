@@ -24,11 +24,14 @@ public class CrearReservaUseCase {
 
     private final CreacionReservaService creacionReservaService;
     private final TitularRepository titularRepository;
+    private final AvisadorReserva avisador;
 
-    public CrearReservaUseCase(CreacionReservaService creacionReservaService, TitularRepository titularRepository) {
+    public CrearReservaUseCase(CreacionReservaService creacionReservaService, TitularRepository titularRepository,
+                               AvisadorReserva avisador) {
 
         this.creacionReservaService = creacionReservaService;
         this.titularRepository = titularRepository;
+        this.avisador = avisador;
     }
 
     @Transactional
@@ -42,7 +45,7 @@ public class CrearReservaUseCase {
                 .obtenerPorCodigo(codigoTitular)
                 .orElseThrow(() -> new TitularNoEncontradoException(codigoTitular));
 
-        return creacionReservaService.crear(
+        Reserva reserva = creacionReservaService.crear(
                 titular,
                 identificacionApartamento,
                 estancia,
@@ -53,5 +56,7 @@ public class CrearReservaUseCase {
                 identificadorExterno,
                 momentoActual
         );
+        avisador.creada(reserva);
+        return reserva;
     }
 }
