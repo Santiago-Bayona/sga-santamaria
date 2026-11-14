@@ -32,6 +32,15 @@ export function AuthProvider({ children }) {
 
   const cerrarSesion = useCallback(() => guardar(null), [guardar]);
 
+  const actualizarNombre = useCallback((nombre) => {
+    setSesion((actual) => {
+      if (!actual) return actual;
+      const nueva = { ...actual, nombre };
+      try { sessionStorage.setItem(CLAVE, JSON.stringify(nueva)); } catch { /* sesión solo en memoria */ }
+      return nueva;
+    });
+  }, []);
+
   const iniciarSesion = useCallback(async (usuario, contrasena) => {
     const { token, username, rol, nombre, codigoTitular } = await loginApi(usuario.trim(), contrasena);
     setSesionExpirada(false);
@@ -49,7 +58,8 @@ export function AuthProvider({ children }) {
     sesionExpirada,
     iniciarSesion,
     cerrarSesion,
-  }), [sesion, sesionExpirada, iniciarSesion, cerrarSesion]);
+    actualizarNombre,
+  }), [sesion, sesionExpirada, iniciarSesion, cerrarSesion, actualizarNombre]);
 
   return <AuthContext.Provider value={valor}>{children}</AuthContext.Provider>;
 }

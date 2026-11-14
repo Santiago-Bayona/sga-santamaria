@@ -10,6 +10,7 @@ import co.edu.uniquindio.sga.application.exception.ReservaNoEncontradaException;
 import co.edu.uniquindio.sga.application.exception.SolicitudAplicacionException;
 import co.edu.uniquindio.sga.application.exception.TitularNoEncontradoException;
 import co.edu.uniquindio.sga.application.exception.TitularYaRegistradoException;
+import co.edu.uniquindio.sga.application.exception.UsuarioConReservasActivasException;
 import co.edu.uniquindio.sga.application.exception.EntidadNoEncontradaException;
 import co.edu.uniquindio.sga.domain.exception.ReglaDominioException;
 import co.edu.uniquindio.sga.infrastructure.exception.InfraestructuraException;
@@ -91,7 +92,8 @@ public class ManejadorExcepcionesGlobal {
             ApartamentoYaRegistradoException.class,
             CanalExternoYaRegistradoException.class,
             NovedadYaRegistradaException.class,
-            UsuarioYaRegistradoException.class
+            UsuarioYaRegistradoException.class,
+            UsuarioConReservasActivasException.class
     })
     public ResponseEntity<ErrorResponse> conflicto(RuntimeException ex, HttpServletRequest req) {
         return respuesta(HttpStatus.CONFLICT, "Conflicto", ex.getMessage(), req, List.of());

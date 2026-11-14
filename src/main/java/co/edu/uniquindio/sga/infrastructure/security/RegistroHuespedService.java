@@ -45,6 +45,7 @@ public class RegistroHuespedService {
         usuario.setRol(RolUsuario.HUESPED);
         usuario.setActivo(true);
         usuario.setNombreCompleto(request.nombre().trim());
+        usuario.setTelefono(request.telefono().trim());
         usuario.setCodigoTitular(codigo.valor());
         return usuarios.save(usuario);
     }

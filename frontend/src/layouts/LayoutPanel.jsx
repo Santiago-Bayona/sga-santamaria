@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { NavLink, Outlet, useLocation } from 'react-router';
 import {
   Ban, BarChart3, BedDouble, Building2, CalendarCheck, CalendarDays, CalendarRange, ClipboardList, Globe, Luggage, LogOut,
-  Menu, MessageSquareWarning, PlusCircle, ScrollText, Sparkles, X,
+  Menu, MessageSquareWarning, PlusCircle, Radio, ScrollText, Sparkles, UserRound, Users, X,
 } from 'lucide-react';
 import Marca from '../components/Marca';
 import Boton from '../components/Boton';
@@ -23,8 +23,9 @@ const RECEPCION = {
   ],
 };
 const SITIO = { titulo: 'Sitio', enlaces: [{ a: '/', texto: 'Ver sitio público', icono: Globe, exacto: true }] };
+const CUENTA = { titulo: 'Cuenta', enlaces: [{ a: '/perfil', texto: 'Mi perfil', icono: UserRound }] };
 const MENU = {
-  RECEPCION: [RECEPCION, SITIO],
+  RECEPCION: [RECEPCION, CUENTA, SITIO],
   ADMIN: [RECEPCION, {
     titulo: 'Administración',
     enlaces: [
@@ -33,22 +34,25 @@ const MENU = {
       { a: '/admin/temporadas', texto: 'Temporadas', icono: CalendarRange },
       { a: '/admin/politica', texto: 'Política de cancelación', icono: ScrollText },
       { a: '/admin/reportes', texto: 'Reportes', icono: BarChart3 },
+      { a: '/admin/usuarios', texto: 'Usuarios', icono: Users },
+      { a: '/admin/canales', texto: 'Canales', icono: Radio },
       { a: '/servicio/novedades', texto: 'Novedades', icono: MessageSquareWarning },
     ],
-  }, SITIO],
+  }, CUENTA, SITIO],
   SERVICIO: [{
     titulo: 'Servicio',
     enlaces: [
       { a: '/servicio', texto: 'Preparación', icono: Sparkles, exacto: true },
       { a: '/servicio/novedades', texto: 'Novedades', icono: MessageSquareWarning },
     ],
-  }],
+  }, CUENTA],
   HUESPED: [{
     titulo: 'Mi cuenta',
     enlaces: [
       { a: '/huesped', texto: 'Mis reservas', icono: Luggage,
         activo: (ruta) => ruta === '/huesped' || (ruta.startsWith('/huesped/reservas/') && ruta !== '/huesped/reservas/nueva') },
       { a: '/', texto: 'Buscar y reservar', icono: Globe, exacto: true },
+      { a: '/perfil', texto: 'Mi perfil', icono: UserRound },
     ],
   }],
 };

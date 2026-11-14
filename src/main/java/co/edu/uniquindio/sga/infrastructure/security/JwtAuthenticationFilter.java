@@ -22,9 +22,11 @@ import java.util.List;
 public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
     private final JwtService jwtService;
+    private final UsuarioJpaRepository usuarios;
 
-    public JwtAuthenticationFilter(JwtService jwtService) {
+    public JwtAuthenticationFilter(JwtService jwtService, UsuarioJpaRepository usuarios) {
         this.jwtService = jwtService;
+        this.usuarios = usuarios;
     }
 
     @Override
@@ -32,13 +34,15 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                                     FilterChain filterChain) throws ServletException, IOException {
         String header = request.getHeader(HttpHeaders.AUTHORIZATION);
         if (header != null && header.startsWith("Bearer ")) {
-            jwtService.validar(header.substring(7)).ifPresent(principal -> {
-                var auth = new UsernamePasswordAuthenticationToken(
-                        principal.username(),
-                        null,
-                        List.of(new SimpleGrantedAuthority("ROLE_" + principal.rol().name())));
-                SecurityContextHolder.getContext().setAuthentication(auth);
-            });
+            jwtService.validar(header.substring(7)).ifPresent(principal -> usuarios.findById(principal.username())
+                    .filter(UsuarioJpaEntity::isActivo)
+                    .ifPresent(usuario -> {
+                        var auth = new UsernamePasswordAuthenticationToken(
+                                usuario.getUsername(),
+                                null,
+                                List.of(new SimpleGrantedAuthority("ROLE_" + usuario.getRol().name())));
+                        SecurityContextHolder.getContext().setAuthentication(auth);
+                    }));
         }
         filterChain.doFilter(request, response);
     }

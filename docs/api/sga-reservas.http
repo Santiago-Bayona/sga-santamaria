@@ -178,3 +178,109 @@ Authorization: Bearer {{login.response.body.token}}
 ### 22. Datos de prueba: reservas por estado (hay una de cada una)
 GET {{base}}/api/reservas/estado/EN_CURSO
 Authorization: Bearer {{login.response.body.token}}
+
+### --- Gestión de usuarios (7.2) ---
+
+### 23. Login administrador
+# @name loginAdmin
+POST {{base}}/api/auth/login
+Content-Type: application/json
+
+{ "username": "admin", "password": "admin123" }
+
+### 24. Listar usuarios activos con rol HUESPED
+GET {{base}}/api/admin/usuarios?rol=HUESPED&activo=true&pagina=0
+Authorization: Bearer {{loginAdmin.response.body.token}}
+
+### 25. Perfil propio
+GET {{base}}/api/usuarios/me
+Authorization: Bearer {{loginAdmin.response.body.token}}
+
+### 26. Actualizar perfil
+PUT {{base}}/api/usuarios/me
+Authorization: Bearer {{loginAdmin.response.body.token}}
+Content-Type: application/json
+
+{ "nombre": "Administrador Santamaría", "telefono": "3001234567" }
+
+### 27. Cambiar rol de recepción
+PUT {{base}}/api/admin/usuarios/recepcion/rol
+Authorization: Bearer {{loginAdmin.response.body.token}}
+Content-Type: application/json
+
+{ "rol": "RECEPCION" }
+
+### 28. 409 — desactivar un huésped con reservas activas (TIT-001 tiene RES-DEMO-001 pendiente)
+POST {{base}}/api/admin/usuarios/huesped/desactivacion
+Authorization: Bearer {{loginAdmin.response.body.token}}
+
+### --- Simulador de canal externo (10.3.1 / 7.8) ---
+### El canal se autentica con JWT de ADMIN o CANAL y la cabecera X-Canal-Credencial
+### (la credencial que se registró para ese canal). No usa una API key global.
+
+@baseUrl = http://localhost:8080
+@credencialCanal = credencial-booking-demo
+
+### 29. Registrar el canal
+# @name altaCanal
+POST {{baseUrl}}/api/canales
+Authorization: Bearer {{loginAdmin.response.body.token}}
+Content-Type: application/json
+
+{ "codigoCanal": "BOOKING", "tipo": "OTA", "credencial": "{{credencialCanal}}" }
+
+### 30. Reserva aceptada — fechas libres en APT-03. La bitácora queda ACEPTADA.
+# @name canalAceptada
+POST {{baseUrl}}/api/canales/BOOKING/conciliaciones
+Authorization: Bearer {{loginAdmin.response.body.token}}
+X-Canal-Credencial: {{credencialCanal}}
+Content-Type: application/json
+
+{
+  "codigoCanal": "BOOKING",
+  "identificadorExterno": "MSG-1001",
+  "codigoTitular": "TIT-003",
+  "identificacionApartamento": "APT-03",
+  "fechaEntrada": "2027-09-10",
+  "fechaSalida": "2027-09-13",
+  "acompanantes": [],
+  "horaLlegadaEstimada": "16:00:00"
+}
+
+### 31. Conflicto rechazado — el mismo rango se cruza con MSG-1001. Bitácora: RECHAZADA_CONFLICTO.
+POST {{baseUrl}}/api/canales/BOOKING/conciliaciones
+Authorization: Bearer {{loginAdmin.response.body.token}}
+X-Canal-Credencial: {{credencialCanal}}
+Content-Type: application/json
+
+{
+  "codigoCanal": "BOOKING",
+  "identificadorExterno": "MSG-1002",
+  "codigoTitular": "TIT-003",
+  "identificacionApartamento": "APT-03",
+  "fechaEntrada": "2027-09-11",
+  "fechaSalida": "2027-09-14",
+  "acompanantes": [],
+  "horaLlegadaEstimada": "16:00:00"
+}
+
+### 32. Mensaje repetido — el mismo MSG-1001 no crea otra reserva. Bitácora: DUPLICADO.
+POST {{baseUrl}}/api/canales/BOOKING/conciliaciones
+Authorization: Bearer {{loginAdmin.response.body.token}}
+X-Canal-Credencial: {{credencialCanal}}
+Content-Type: application/json
+
+{
+  "codigoCanal": "BOOKING",
+  "identificadorExterno": "MSG-1001",
+  "codigoTitular": "TIT-003",
+  "identificacionApartamento": "APT-03",
+  "fechaEntrada": "2027-09-10",
+  "fechaSalida": "2027-09-13",
+  "acompanantes": [],
+  "horaLlegadaEstimada": "16:00:00"
+}
+
+### 33. Bitácora: deben verse los tres registros (DUPLICADO, RECHAZADA_CONFLICTO, ACEPTADA)
+GET {{baseUrl}}/api/canales/bitacora?pagina=0
+Authorization: Bearer {{loginAdmin.response.body.token}}

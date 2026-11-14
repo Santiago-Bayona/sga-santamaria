@@ -30,6 +30,9 @@ import Temporadas from './pages/admin/Temporadas';
 import Politica from './pages/admin/Politica';
 import Reportes from './pages/admin/Reportes';
 import NoEncontrado from './pages/comun/NoEncontrado';
+import Perfil from './pages/comun/Perfil';
+import Usuarios from './pages/admin/Usuarios';
+import BitacoraCanales from './pages/admin/BitacoraCanales';
 
 const INTERNOS = ['RECEPCION', 'ADMIN'];
 
@@ -52,6 +55,7 @@ export default function App() {
 
             <Route element={<RutaProtegida />}>
               <Route element={<LayoutPanel />}>
+                <Route path="/perfil" element={<Perfil />} />
                 <Route element={<RutaProtegida roles={['HUESPED']} />}>
                   <Route path="/huesped" element={<MisReservas />} />
                   <Route path="/huesped/reservas/nueva" element={<NuevaReservaHuesped />} />
@@ -77,6 +81,8 @@ export default function App() {
                   <Route path="/admin/temporadas" element={<Temporadas />} />
                   <Route path="/admin/politica" element={<Politica />} />
                   <Route path="/admin/reportes" element={<Reportes />} />
+                  <Route path="/admin/usuarios" element={<Usuarios />} />
+                  <Route path="/admin/canales" element={<BitacoraCanales />} />
                 </Route>
               </Route>
             </Route>
