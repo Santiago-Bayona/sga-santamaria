@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { BedDouble, Users } from 'lucide-react';
 import { formatearPesos } from '../utils/formato';
+import { resolverImagen } from '../utils/imagen';
 
 /** Tarjeta de resultado (7.5): imagen principal, capacidad y valor estimado. Sin imagen, usa un fondo de la marca. */
 export default function TarjetaApartamento({ apartamento, valorEstimado, noches, accion }) {
@@ -10,7 +11,7 @@ export default function TarjetaApartamento({ apartamento, valorEstimado, noches,
     <article className="tarjeta apto">
       <div className="apto__imagen">
         {imagenPrincipal && !imagenRota
-          ? <img src={imagenPrincipal} alt={`Apartamento ${nombre}`} onError={() => setImagenRota(true)} loading="lazy" />
+          ? <img src={resolverImagen(imagenPrincipal)} alt={`Apartamento ${nombre}`} onError={() => setImagenRota(true)} loading="lazy" />
           : <span className="apto__inicial" aria-hidden="true">{nombre?.[0]}</span>}
       </div>
       <div className="apto__cuerpo">

@@ -34,6 +34,8 @@ El mismo código corre en local y en la nube. Lo que cambia son variables de ent
 
 La aplicación y el API ya están publicados en esas direcciones. El front llama al API con `VITE_API_URL`.
 
+Las fotos de demostración son ilustraciones del propio front, en `frontend/public/galeria`, así que se ven aunque Render no guarde archivos. El mapa usa OpenStreetMap. Si al construir el front se define `VITE_MAPBOX_TOKEN`, el mapa pasa a Mapbox.
+
 El plan gratuito de Render duerme el servicio tras unos 15 minutos sin uso: la primera petición después puede tardar cerca de un minuto, y la base H2 en archivo vuelve al estado inicial (se pierden las reservas creadas). Por eso en Render hay que dejar `SGA_USUARIOS_INICIALES_HABILITADOS=true`, para que al despertar exista de nuevo la cuenta de administración. La contraseña de esa cuenta solo vive en las variables de Render.
 
 En producción Swagger y la consola H2 quedan apagados: `/swagger-ui.html` responde 401. El perfil local `dev` sigue con H2 en memoria, usuarios de prueba y Swagger en `/swagger-ui.html`.

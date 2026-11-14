@@ -1,12 +1,15 @@
 import { useState } from 'react';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
+import { resolverImagen } from '../utils/imagen';
 
 /**
  * Galería pública del apartamento (7.5): la imagen grande y las miniaturas debajo. Las imágenes que no cargan se
  * quitan solas; si no queda ninguna, se muestra el fondo de la marca con la inicial.
  */
 export default function Galeria({ nombre, imagenes = [], principal }) {
-  const ordenadas = principal && imagenes.includes(principal) ? [principal, ...imagenes.filter((u) => u !== principal)] : imagenes;
+  const fuentes = imagenes.map(resolverImagen);
+  const portada = resolverImagen(principal);
+  const ordenadas = portada && fuentes.includes(portada) ? [portada, ...fuentes.filter((u) => u !== portada)] : fuentes;
   const [rotas, setRotas] = useState([]);
   const [actual, setActual] = useState(0);
   const visibles = ordenadas.filter((u) => !rotas.includes(u));

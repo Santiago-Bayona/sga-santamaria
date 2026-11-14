@@ -4,6 +4,7 @@ import Tarjeta from './Tarjeta';
 import Boton from './Boton';
 import { useToast } from './Toasts';
 import { guardarGaleria, subirImagen } from '../api/apartamentos';
+import { resolverImagen } from '../utils/imagen';
 
 const TIPOS = ['image/jpeg', 'image/png', 'image/webp'];
 const MAXIMO_BYTES = 5 * 1024 * 1024;
@@ -75,7 +76,7 @@ export default function GaleriaAdmin({ apartamento, alCambiar }) {
             <div className="galeria-admin__foto">
               {rotas.includes(url)
                 ? <span className="galeria-admin__rota"><ImageOff size={22} aria-hidden="true" /> No carga</span>
-                : <img src={url} alt={`Foto ${i + 1} de ${apartamento.nombre}`} loading="lazy" onError={() => setRotas((r) => [...r, url])} />}
+                : <img src={resolverImagen(url)} alt={`Foto ${i + 1} de ${apartamento.nombre}`} loading="lazy" onError={() => setRotas((r) => [...r, url])} />}
               {i === indicePrincipal && <span className="galeria-admin__sello"><Star size={13} aria-hidden="true" /> Principal</span>}
             </div>
             <figcaption className="galeria-admin__acciones">

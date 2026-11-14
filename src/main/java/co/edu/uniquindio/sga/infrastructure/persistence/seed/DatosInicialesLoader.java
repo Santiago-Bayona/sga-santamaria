@@ -114,6 +114,7 @@ public class DatosInicialesLoader implements ApplicationRunner {
     @Override
     public void run(ApplicationArguments args) {
         if (alojamientoYaExiste()) {
+            repararGaleriasDeDemostracion();
             LOG.info("Semilla omitida: el alojamiento ya está persistido.");
             return;
         }
@@ -190,9 +191,7 @@ public class DatosInicialesLoader implements ApplicationRunner {
                     a.descripcion(),
                     a.dormitorios(),
                     new Capacidad(a.capacidad()),
-                    new GaleriaImagenes(List.of(
-                            "https://sga.local/galeria/" + slug + "-1.jpg",
-                            "https://sga.local/galeria/" + slug + "-2.jpg"), 0));
+                    galeriaDeDemostracion(slug));
             apartamento.definirDotacion(a.dotacion());
             a.tarifas().forEach((temporada, valor) ->
                     apartamento.definirTarifa(new Tarifa(idTemporada(temporada), Dinero.pesos(valor)), ahora));
@@ -200,6 +199,30 @@ public class DatosInicialesLoader implements ApplicationRunner {
             apartamentos.put(a.id().toUpperCase(Locale.ROOT), apartamento);
         }
         return apartamentos;
+    }
+
+    /**
+     * Ilustraciones servidas por el frontend en {@code /galeria}. Así la demo se ve en Vercel sin Cloudinary
+     * y sigue disponible cuando el disco de Render vuelve a empezar.
+     */
+    private static GaleriaImagenes galeriaDeDemostracion(String slug) {
+        return new GaleriaImagenes(List.of(
+                "/galeria/" + slug + "-1.svg",
+                "/galeria/" + slug + "-2.svg"), 0);
+    }
+
+    /** Sustituye las direcciones de relleno sga.local si la base ya existía antes de este cambio. */
+    private void repararGaleriasDeDemostracion() {
+        for (FichaProperties.ApartamentoFicha a : ficha.apartamentos()) {
+            String slug = a.id().toLowerCase(Locale.ROOT);
+            apartamentoRepository.obtenerPorIdentificacion(new IdentificacionApartamento(a.id()))
+                    .filter(apto -> apto.getGaleria().urls().stream().anyMatch(url -> url.contains("sga.local")))
+                    .ifPresent(apto -> {
+                        apto.reemplazarGaleria(galeriaDeDemostracion(slug));
+                        apartamentoRepository.guardar(apto);
+                        LOG.info("Galería de demostración actualizada para {}", a.id());
+                    });
+        }
     }
 
     // ------------------------------------------------------------------ Datos de demostración (12.3)

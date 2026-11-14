@@ -4,8 +4,8 @@ import { ExternalLink, MapPin } from 'lucide-react';
 const TOKEN = import.meta.env.VITE_MAPBOX_TOKEN;
 
 /**
- * Mapa del alojamiento con Mapbox (7.5). La librería se carga solo cuando hace falta. Sin token
- * (VITE_MAPBOX_TOKEN) o si Mapbox falla, muestra la dirección con un enlace al mapa, así la página nunca se rompe.
+ * Mapa del alojamiento (7.5). Con VITE_MAPBOX_TOKEN usa Mapbox y carga la librería solo entonces.
+ * Sin token, o si Mapbox falla, muestra OpenStreetMap. Si tampoco hay coordenadas, queda la dirección.
  */
 export default function MapaUbicacion({ latitud, longitud, nombre, direccion, ciudad, alto = 300 }) {
   const contenedor = useRef(null);
@@ -16,6 +16,10 @@ export default function MapaUbicacion({ latitud, longitud, nombre, direccion, ci
   const yaTraeCiudad = ciudad && direccion?.toLowerCase().includes(ciudad.toLowerCase());
   const lugar = (yaTraeCiudad ? [direccion] : [direccion, ciudad]).filter(Boolean).join(', ');
   const enlace = valido ? `https://www.openstreetmap.org/?mlat=${lat}&mlon=${lng}#map=15/${lat}/${lng}` : null;
+  const delta = 0.018;
+  const mapaOsm = valido
+    ? `https://www.openstreetmap.org/export/embed.html?bbox=${lng - delta}%2C${lat - delta}%2C${lng + delta}%2C${lat + delta}&layer=mapnik&marker=${lat}%2C${lng}`
+    : null;
 
   useEffect(() => {
     if (!TOKEN || !valido || !contenedor.current) return undefined;
@@ -44,11 +48,13 @@ export default function MapaUbicacion({ latitud, longitud, nombre, direccion, ci
     return () => { cancelado = true; mapa?.remove(); };
   }, [lat, lng, valido, nombre]);
 
-  const mostrarMapa = TOKEN && valido && !fallo;
+  const mostrarMapbox = Boolean(TOKEN) && valido && !fallo;
   return (
     <div className="mapa">
-      {mostrarMapa ? (
+      {mostrarMapbox ? (
         <div ref={contenedor} className="mapa__lienzo" style={{ height: alto }} role="region" aria-label={`Mapa de ${nombre ?? 'el alojamiento'}`} />
+      ) : mapaOsm ? (
+        <iframe className="mapa__lienzo" style={{ height: alto }} title={`Mapa de ${nombre ?? 'el alojamiento'}`} src={mapaOsm} loading="lazy" />
       ) : (
         <div className="mapa__respaldo" style={{ height: alto }}>
           <MapPin size={34} aria-hidden="true" />
