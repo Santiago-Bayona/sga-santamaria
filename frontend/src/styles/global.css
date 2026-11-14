@@ -62,6 +62,8 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .marca__texto { display: flex; flex-direction: column; line-height: 1.2; }
 .marca__nombre { font-weight: 700; font-size: 20px; }
 .marca__sub { font-size: 13px; }
+.marca__logo { width: 80px; height: auto; display: block; }
+.marca__logo--claro { background: #fff; border-radius: 12px; padding: 4px; }
 
 
 /* ---------- Botones ---------- */
