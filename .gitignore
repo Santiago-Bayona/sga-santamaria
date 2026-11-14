@@ -35,7 +35,7 @@ application-secrets.properties
 *.key
 
 # ===== IDEs =====
-../.idea/
+.idea/
 *.iml
 *.ipr
 *.iws
