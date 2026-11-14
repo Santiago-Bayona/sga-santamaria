@@ -35,6 +35,12 @@ public class UsuarioJpaEntity {
     @Column(name = "nombre_completo", nullable = false)
     private String nombreCompleto;
 
+    @Column(length = 30)
+    private String telefono;
+
+    @Column(name = "foto_url", length = 500)
+    private String fotoUrl;
+
     public String getUsername() {
         return username;
     }
@@ -81,5 +87,21 @@ public class UsuarioJpaEntity {
 
     public void setNombreCompleto(String nombreCompleto) {
         this.nombreCompleto = nombreCompleto;
+    }
+
+    public String getTelefono() {
+        return telefono;
+    }
+
+    public void setTelefono(String telefono) {
+        this.telefono = telefono;
+    }
+
+    public String getFotoUrl() {
+        return fotoUrl;
+    }
+
+    public void setFotoUrl(String fotoUrl) {
+        this.fotoUrl = fotoUrl;
     }
 }

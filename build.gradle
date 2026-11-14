@@ -43,3 +43,8 @@ tasks.named('test') {
 	useJUnitPlatform()
 }
 
+tasks.named('processResources') {
+	exclude 'application-secrets.properties'
+	exclude 'application-secrets.yml'
+}
+

@@ -31,11 +31,14 @@ public class SecurityConfig {
 
     private final JwtAuthenticationFilter jwtFilter;
     private final List<String> origenes;
+    private final boolean herramientasDesarrollo;
 
     public SecurityConfig(JwtAuthenticationFilter jwtFilter,
-                          @Value("${sga.seguridad.cors-origins}") String origenes) {
+                          @Value("${sga.seguridad.cors-origins}") String origenes,
+                          @Value("${sga.seguridad.herramientas-desarrollo:true}") boolean herramientasDesarrollo) {
         this.jwtFilter = jwtFilter;
-        this.origenes = Arrays.stream(origenes.split(",")).map(String::trim).toList();
+        this.origenes = Arrays.stream(origenes.split(",")).map(String::trim).filter(origen -> !origen.isEmpty()).toList();
+        this.herramientasDesarrollo = herramientasDesarrollo;
     }
 
     @Bean
@@ -45,14 +48,19 @@ public class SecurityConfig {
                 .cors(Customizer.withDefaults())
                 .sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .headers(h -> h.frameOptions(HeadersConfigurer.FrameOptionsConfig::sameOrigin))
-                .authorizeHttpRequests(auth -> auth
-                        .requestMatchers("/api/auth/**").permitAll()
-                        .requestMatchers(HttpMethod.GET, "/api/disponibilidad", "/api/alojamiento", "/api/apartamentos").permitAll()
-                        .requestMatchers(HttpMethod.POST, "/api/cotizaciones").permitAll()
-                        .requestMatchers(HttpMethod.GET, "/api/archivos/imagenes/**").permitAll()
-                        .requestMatchers("/h2-console/**", "/actuator/health", "/actuator/info", "/api/docs",
-                                "/swagger-ui.html", "/swagger-ui/**", "/v3/api-docs", "/v3/api-docs/**", "/v3/api-docs.yaml").permitAll()
-                        .anyRequest().authenticated())
+                .authorizeHttpRequests(auth -> {
+                    auth.requestMatchers("/api/auth/**").permitAll()
+                            .requestMatchers(HttpMethod.GET, "/api/disponibilidad", "/api/alojamiento", "/api/apartamentos").permitAll()
+                            .requestMatchers(HttpMethod.POST, "/api/cotizaciones").permitAll()
+                            .requestMatchers(HttpMethod.GET, "/api/archivos/imagenes/**").permitAll()
+                            .requestMatchers("/actuator/health", "/actuator/info").permitAll();
+                    if (herramientasDesarrollo) {
+                        auth.requestMatchers("/h2-console/**", "/api/docs",
+                                "/swagger-ui.html", "/swagger-ui/**", "/v3/api-docs", "/v3/api-docs/**",
+                                "/v3/api-docs.yaml").permitAll();
+                    }
+                    auth.anyRequest().authenticated();
+                })
                 // Guía 12 (3.14): sin token o con token inválido/vencido → 401, no 403
                 .exceptionHandling(e -> e.authenticationEntryPoint(new HttpStatusEntryPoint(HttpStatus.UNAUTHORIZED)))
                 .addFilterBefore(jwtFilter, UsernamePasswordAuthenticationFilter.class)
@@ -63,11 +71,11 @@ public class SecurityConfig {
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration cors = new CorsConfiguration();
         cors.setAllowedOrigins(origenes);
-        cors.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
+        cors.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "OPTIONS"));
         cors.setAllowedHeaders(List.of("Authorization", "Content-Type", "X-Autor", "X-Canal-Credencial"));
         cors.setExposedHeaders(List.of("Authorization", "Location"));
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
-        source.registerCorsConfiguration("/**", cors);
+        source.registerCorsConfiguration("/api/**", cors);
         return source;
     }
 }

@@ -2,9 +2,8 @@ spring:
   application:
     name: sga
   config:
-    # La clave del JWT NO se versiona (12.4): se lee de este archivo local (ignorado por Git)
-    # o, en despliegue, de la variable de entorno SGA_JWT_SECRET.
-    import: optional:classpath:application-secrets.yml
+    # Secretos locales, fuera del JAR (Guía 22). En producción no existe el archivo: llegan por entorno.
+    import: optional:file:./src/main/resources/application-secrets.yml
   profiles:
     active: ${SGA_PERFIL:dev}
   jackson:
@@ -16,7 +15,8 @@ spring:
       max-file-size: 5MB
       max-request-size: 6MB
 server:
-  port: ${SERVER_PORT:8080}
+  # Render inyecta PORT. SERVER_PORT sigue sirviendo en local.
+  port: ${PORT:${SERVER_PORT:8080}}
 
 springdoc:
   api-docs:
@@ -155,7 +155,9 @@ sga:
   seguridad:
     jwt-secret: ${SGA_JWT_SECRET:${sga.secreto.jwt}}
     jwt-expiracion-minutos: ${SGA_JWT_EXP_MIN:30}
-    cors-origins: ${SGA_CORS_ORIGINS:http://localhost:8080,http://localhost:5173}
+    cors-origins: ${SGA_CORS_ORIGINS:${SGA_CORS_ALLOWED_ORIGINS:http://localhost:8080,http://localhost:5173,http://localhost:5174}}
+    # Swagger y la consola H2 solo se exponen si es true. El perfil prod lo apaga.
+    herramientas-desarrollo: true
   # ---- Correo: log = simulado en consola (por defecto) | brevo = envío real con la API de Brevo
   correo:
     proveedor: ${SGA_CORREO_PROVEEDOR:log}
@@ -175,3 +177,12 @@ sga:
     modelo: ${SGA_IA_MODELO:}                         # solo openai-compatible: nombre del modelo en el proveedor
     tiempo-espera-ms: ${SGA_IA_TIEMPO_ESPERA_MS:5000} # tiempo máximo de espera de la respuesta (I-03)
     clave: ${SGA_IA_CLAVE:${sga.secreto.ia-clave:}}   # I-06: nunca versionada; va en application-secrets.yml
+  # Semilla de acceso. En prod el perfil la apaga y, si se vuelve a encender, crea solo la cuenta inicial.
+  usuarios-iniciales:
+    habilitados: true
+    modo: semilla
+    admin:
+      correo: ${SGA_ADMIN_CORREO:}
+      contrasena: ${SGA_ADMIN_CONTRASENA:}
+      nombre: ${SGA_ADMIN_NOMBRE:Administrador Santamaría}
+      telefono: ${SGA_ADMIN_TELEFONO:}

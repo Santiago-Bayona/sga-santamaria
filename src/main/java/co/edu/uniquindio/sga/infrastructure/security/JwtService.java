@@ -22,7 +22,11 @@ public class JwtService {
 
     public JwtService(@Value("${sga.seguridad.jwt-secret}") String secreto,
                       @Value("${sga.seguridad.jwt-expiracion-minutos}") long minutos) {
-        this.secreto = secreto.getBytes(StandardCharsets.UTF_8);
+        byte[] bytes = secreto == null ? new byte[0] : secreto.getBytes(StandardCharsets.UTF_8);
+        if (bytes.length < 32) {
+            throw new IllegalStateException("SGA_JWT_SECRET debe tener al menos 32 bytes.");
+        }
+        this.secreto = bytes;
         this.expiracionSegundos = minutos * 60;
     }
 
