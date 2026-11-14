@@ -33,8 +33,11 @@ public class ConciliacionCanalExternoService {
 
     public enum TipoResultado { ACEPTADA, DUPLICADA, CONFLICTO }
 
-    /** reserva: la creada o la ya existente (ACEPTADA/DUPLICADA). conflicto: el registrado (CONFLICTO). */
-    public record ResultadoConciliacion(TipoResultado tipo, Reserva reserva, ConflictoCanal conflicto) {
+    /**
+     * reserva: la creada o la ya existente (ACEPTADA/DUPLICADA). conflicto: el registrado (CONFLICTO).
+     * primeraVez es false cuando el mismo identificador ya se había procesado.
+     */
+    public record ResultadoConciliacion(TipoResultado tipo, Reserva reserva, ConflictoCanal conflicto, boolean primeraVez) {
     }
 
     private final ReservaRepository reservaRepository;
@@ -66,11 +69,11 @@ public class ConciliacionCanalExternoService {
         // RN-19: el mismo mensaje recibido otra vez devuelve lo que ya se hizo con él
         Optional<Reserva> existente = reservaRepository.obtenerPorIdentificadorExterno(CanalOrigen.EXTERNO, identificador);
         if (existente.isPresent()) {
-            return new ResultadoConciliacion(TipoResultado.DUPLICADA, existente.get(), null);
+            return new ResultadoConciliacion(TipoResultado.DUPLICADA, existente.get(), null, false);
         }
         Optional<ConflictoCanal> conflictoPrevio = conflictoRepository.obtenerPorIdentificadorExterno(identificador);
         if (conflictoPrevio.isPresent()) {
-            return new ResultadoConciliacion(TipoResultado.CONFLICTO, null, conflictoPrevio.get());
+            return new ResultadoConciliacion(TipoResultado.CONFLICTO, null, conflictoPrevio.get(), false);
         }
 
         // RN-18: colisión con una reserva vigente → se rechaza y se registra, la vigente no se toca
@@ -81,13 +84,13 @@ public class ConciliacionCanalExternoService {
             ConflictoCanal conflicto = new ConflictoCanal(new CodigoConflictoCanal("CON-" + identificador.valor()),
                     CanalOrigen.EXTERNO, identificador, apartamento, estancia, colision.get().getCodigo(), ahora);
             conflictoRepository.guardar(conflicto);
-            return new ResultadoConciliacion(TipoResultado.CONFLICTO, null, conflicto);
+            return new ResultadoConciliacion(TipoResultado.CONFLICTO, null, conflicto, true);
         }
 
         // Sin colisión: misma creación y mismas validaciones que portal y directo (F-10)
         Reserva creada = creacion.crear(titular, apartamento, estancia, acompanantes, horaLlegadaEstimada,
                 CanalOrigen.EXTERNO, identificador, ahora);
-        return new ResultadoConciliacion(TipoResultado.ACEPTADA, creada, null);
+        return new ResultadoConciliacion(TipoResultado.ACEPTADA, creada, null, true);
     }
 
     /** Cancelación enviada por el canal. Idempotente: si ya estaba cancelada, no hace nada. */

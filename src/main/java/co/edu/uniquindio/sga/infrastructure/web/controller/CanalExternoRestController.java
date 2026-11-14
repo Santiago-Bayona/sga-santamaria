@@ -4,6 +4,7 @@ import co.edu.uniquindio.sga.application.dto.request.ConciliarReservaExternaRequ
 import co.edu.uniquindio.sga.application.dto.request.RegistrarCanalExternoRequest;
 import co.edu.uniquindio.sga.application.dto.request.RotarCredencialCanalExternoRequest;
 import co.edu.uniquindio.sga.application.dto.response.CanalExternoResponse;
+import co.edu.uniquindio.sga.application.dto.response.EventoBitacoraResponse;
 import co.edu.uniquindio.sga.application.dto.response.ConflictoCanalResponse;
 import co.edu.uniquindio.sga.application.dto.response.LiquidacionPoliticaResponse;
 import co.edu.uniquindio.sga.application.dto.response.PaginaResponse;
@@ -11,6 +12,7 @@ import co.edu.uniquindio.sga.application.dto.response.ResultadoConciliacionRespo
 import co.edu.uniquindio.sga.application.usecase.ActivarCanalExternoUseCase;
 import co.edu.uniquindio.sga.application.usecase.CancelarReservaExternaUseCase;
 import co.edu.uniquindio.sga.application.usecase.ConciliarReservaExternaUseCase;
+import co.edu.uniquindio.sga.application.usecase.ConsultarBitacoraCanalUseCase;
 import co.edu.uniquindio.sga.application.usecase.ConsultarCanalesExternosUseCase;
 import co.edu.uniquindio.sga.application.usecase.ConsultarConflictosCanalUseCase;
 import co.edu.uniquindio.sga.application.usecase.DesactivarCanalExternoUseCase;
@@ -54,6 +56,7 @@ public class CanalExternoRestController {
     private final ConciliarReservaExternaUseCase conciliar;
     private final CancelarReservaExternaUseCase cancelarExterna;
     private final ConsultarConflictosCanalUseCase conflictos;
+    private final ConsultarBitacoraCanalUseCase consultarBitacora;
     private final CredencialCanalExternoAdapter credenciales;
     private final RespuestaApiMapper respuestas;
     private final SolicitudApiMapper solicitudes;
@@ -67,6 +70,7 @@ public class CanalExternoRestController {
                                       ConciliarReservaExternaUseCase conciliar,
                                       CancelarReservaExternaUseCase cancelarExterna,
                                       ConsultarConflictosCanalUseCase conflictos,
+                                      ConsultarBitacoraCanalUseCase consultarBitacora,
                                       CredencialCanalExternoAdapter credenciales,
                                       RespuestaApiMapper respuestas,
                                       SolicitudApiMapper solicitudes,
@@ -79,6 +83,7 @@ public class CanalExternoRestController {
         this.conciliar = conciliar;
         this.cancelarExterna = cancelarExterna;
         this.conflictos = conflictos;
+        this.consultarBitacora = consultarBitacora;
         this.credenciales = credenciales;
         this.respuestas = respuestas;
         this.solicitudes = solicitudes;
@@ -145,6 +150,15 @@ public class CanalExternoRestController {
                 .map(respuestas::liquidacion)
                 .map(ResponseEntity::ok)
                 .orElseGet(() -> ResponseEntity.noContent().build());
+    }
+
+    @GetMapping("/bitacora")
+    public PaginaResponse<EventoBitacoraResponse> bitacora(@RequestParam(defaultValue = "0") int pagina) {
+        var resultado = consultarBitacora.ejecutar(pagina);
+        return PaginaResponse.desde(resultado.contenido().stream().map(evento -> new EventoBitacoraResponse(
+                evento.getCodigo(), evento.getCodigoCanal(), evento.getIdentificadorExterno(), evento.getOcurridoEn(),
+                evento.getPayload(), evento.getResultado().name(), evento.getMotivo())).toList(),
+                resultado.numero(), resultado.total());
     }
 
     @GetMapping("/conflictos")
