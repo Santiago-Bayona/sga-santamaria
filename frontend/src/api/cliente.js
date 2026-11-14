@@ -2,7 +2,12 @@
  * Cliente HTTP único del frontend: el "adaptador" hacia la API del SGA.
  * Pone el token, convierte la respuesta y traduce los errores al ErrorResponse del backend.
  */
-const URL_BASE = (import.meta.env.VITE_API_URL ?? 'http://localhost:8080').replace(/\/$/, '');
+/** Origen del API. Vacío = mismo origen (en desarrollo, el proxy de Vite). Acepta la URL con o sin /api final. */
+function origenApi() {
+  let base = (import.meta.env.VITE_API_URL ?? '').trim().replace(/\/$/, '');
+  if (base.endsWith('/api')) base = base.slice(0, -4);
+  return base;
+}
 
 let tokenActual = null;
 let alExpirarSesion = () => {};
@@ -35,7 +40,10 @@ const MENSAJES_POR_ESTADO = {
 };
 
 function construirUrl(ruta, consulta) {
-  const url = new URL(URL_BASE + ruta);
+  const origen = origenApi();
+  const url = origen
+    ? new URL(ruta, origen.endsWith('/') ? origen : `${origen}/`)
+    : new URL(ruta, window.location.origin);
   if (consulta) {
     Object.entries(consulta).forEach(([clave, valor]) => {
       if (valor === undefined || valor === null || valor === '') return;
@@ -53,6 +61,7 @@ export async function solicitar(ruta, { metodo = 'GET', cuerpo, consulta, encabe
   try {
     respuesta = await fetch(construirUrl(ruta, consulta), {
       method: metodo,
+      signal: AbortSignal.timeout(70_000),
       headers: {
         Accept: 'application/json',
         ...(cuerpo !== undefined && !esFormulario ? { 'Content-Type': 'application/json' } : {}),
@@ -61,7 +70,10 @@ export async function solicitar(ruta, { metodo = 'GET', cuerpo, consulta, encabe
       },
       body: esFormulario ? cuerpo : cuerpo !== undefined ? JSON.stringify(cuerpo) : undefined,
     });
-  } catch {
+  } catch (error) {
+    if (error?.name === 'TimeoutError' || error?.name === 'AbortError') {
+      throw new ErrorApi({ status: 0, mensaje: 'El servidor tardó demasiado en responder. Si acaba de despertar, intenta de nuevo.' });
+    }
     throw new ErrorApi({ status: 0, mensaje: 'No hay conexión con el servidor. ¿Está arriba el backend?' });
   }
 

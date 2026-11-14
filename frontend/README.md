@@ -5,8 +5,9 @@ Interfaz web del Sistema de Gestión de Alojamiento, en **React 19 + Vite**, con
 
 ## Cómo correrlo
 
-Requisitos: Node 20 o superior y el backend arriba en `http://localhost:8080`
-(su CORS ya permite `http://localhost:5173`).
+Requisitos: Node 22 y el backend arriba en `http://localhost:8080`
+(su CORS ya permite `http://localhost:5173`). En desarrollo, Vite reenvía `/api` a ese backend
+si no defines `VITE_API_URL`.
 
 ```bash
 cd frontend
@@ -14,9 +15,9 @@ npm install
 npm run dev        # http://localhost:5173
 ```
 
-Por defecto el frontend llama a `http://localhost:8080`. Para otra URL, copie `.env.deveploment`
-como `.env.development` (o `.env.production` antes de `npm run build`) y cambie `VITE_API_URL`.
-Esos archivos no se suben: están en el `.gitignore`.
+La URL del API sale de `VITE_API_URL` (origen, sin `/api` final; si la trae, el cliente la quita).
+Copia `.env.example` como `.env.development` para local, o como `.env.production` antes de `npm run build`.
+Esos archivos no se suben. En Vercel la variable se define en el proyecto y queda horneada en el build.
 
 El mapa del alojamiento usa **Mapbox**: ponga su token público (`pk....`) en `VITE_MAPBOX_TOKEN` del mismo archivo
 (`.env.development`). Sin token, la página muestra la dirección con un enlace a OpenStreetMap y no se rompe nada.

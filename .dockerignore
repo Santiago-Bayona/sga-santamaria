@@ -1,0 +1,14 @@
+build/
+.gradle/
+.git/
+.idea/
+.vscode/
+*.iml
+HELP.md
+data/
+src/main/resources/application-secrets.properties
+src/main/resources/application-secrets.yml
+frontend/node_modules/
+frontend/dist/
+*.md
+!README.md
