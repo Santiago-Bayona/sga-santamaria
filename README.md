@@ -84,7 +84,7 @@ dominio que llegan del API.
 | Capa | Tecnologías |
 |---|---|
 | Backend | Java 21, Spring Boot 4.1, Spring Security con JWT, Spring Data JPA, Flyway, MapStruct, SpringDoc OpenAPI |
-| Base de datos | MySQL 8 (Docker en local, servicio administrado en producción) · H2 para desarrollo y pruebas |
+| Base de datos | MySQL 8 (Docker en local) · TiDB Cloud, compatible con MySQL, en producción · H2 para desarrollo y pruebas |
 | Frontend | React 19, Vite, React Router, Lucide, Mapbox GL |
 | Infraestructura | Docker, Render (API), Vercel (frontend) |
 
@@ -186,7 +186,7 @@ Las pruebas corren con H2 en memoria: no necesitan Docker ni claves.
 |---|---|---|
 | Frontend | Vercel (carpeta `frontend`) | Llama al API con `VITE_API_URL` |
 | API | Render (Docker, rama `main`) | Imagen con Java 21 definida en el `Dockerfile` |
-| Base de datos | MySQL administrado | Conexión por `SGA_DB_URL` |
+| Base de datos | TiDB Cloud Starter (compatible con MySQL) | Conexión por `SGA_DB_URL` con TLS; se crea con las migraciones de Flyway |
 
 En producción Swagger y la consola de H2 quedan desactivados.
 
