@@ -1,4 +1,5 @@
-import { ArrowRight } from 'lucide-react';
+import { ArrowLeft, ArrowRight } from 'lucide-react';
+import { Link } from 'react-router';
 import Marca from '../components/Marca';
 import './acceso.css';
 
@@ -11,7 +12,7 @@ export default function LayoutAcceso({ children }) {
           <img src="/mirador.svg" alt="Ilustración del mirador de Montenegro, Quindío, al atardecer entre montañas y palmas de cera" />
         </div>
         <div className="acceso__textos">
-          <div className="entra entra-1"><Marca /></div>
+          <Link to="/" className="entra entra-1 acceso__inicio" aria-label="Volver al inicio de Santamaría"><Marca /></Link>
           <div className="acceso__lema">
             <span className="acceso__linea entra entra-2" />
             <h2 className="acceso__titulo entra entra-3">El Quindío se ve mejor desde lo alto</h2>
@@ -25,7 +26,12 @@ export default function LayoutAcceso({ children }) {
           <span className="acceso__insignia-circulo"><ArrowRight size={30} /></span>
         </div>
       </section>
-      <section className="acceso__panel">{children}</section>
+      <section className="acceso__panel">
+        <div className="acceso__contenido">
+          <Link to="/" className="acceso__volver"><ArrowLeft size={16} aria-hidden="true" /> Volver al inicio</Link>
+          {children}
+        </div>
+      </section>
     </main>
   );
 }
