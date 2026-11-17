@@ -8,6 +8,7 @@ import co.edu.uniquindio.sga.domain.repository.ReservaRepository;
 import co.edu.uniquindio.sga.domain.valueobject.EstadoOperativo;
 import co.edu.uniquindio.sga.domain.valueobject.IdentificacionApartamento;
 
+import java.util.ArrayList;
 import java.util.List;
 
 /**
@@ -27,9 +28,12 @@ public class PreparacionApartamentoService {
         this.reservaRepository = reservaRepository;
     }
 
-    /** 7.1 personal de servicio: apartamentos que esperan preparación. */
+    /** 7.1 personal de servicio: apartamentos en preparación (primero) y los que esperan preparación. */
     public List<Apartamento> pendientesDePreparacion() {
-        return apartamentoRepository.buscarPorEstadoOperativo(EstadoOperativo.PENDIENTE_PREPARACION);
+        List<Apartamento> resultado = new ArrayList<>(
+                apartamentoRepository.buscarPorEstadoOperativo(EstadoOperativo.EN_PREPARACION));
+        resultado.addAll(apartamentoRepository.buscarPorEstadoOperativo(EstadoOperativo.PENDIENTE_PREPARACION));
+        return resultado;
     }
 
     /** PENDIENTE_PREPARACION → EN_PREPARACION */
